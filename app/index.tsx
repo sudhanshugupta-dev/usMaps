@@ -1,106 +1,126 @@
-import { Image, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useScale } from '@/hooks/useScale';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const scale = useScale();
   const styles = useHomeScreenStyles();
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">🗺️ Map Viewer</ThemedText>
-        <ThemedText>
-          Explore interactive maps with multiple layers including satellite imagery, political boundaries, demographics, and more.
+    <ThemedView style={styles.container}>
+      <View style={styles.content}>
+        {/* Map Icon */}
+        <View style={styles.iconContainer}>
+          <MaterialCommunityIcons 
+            name="map-marker-radius" 
+            size={60 * scale} 
+            color="#1E88E5" 
+          />
+        </View>
+
+        {/* Title */}
+        <ThemedText type="title" style={styles.title}>
+          US Maps
         </ThemedText>
+
+        {/* Description */}
+        <ThemedText style={styles.description}>
+          Explore interactive maps with multiple layers including satellite imagery, 
+          political boundaries, demographics, and more.
+        </ThemedText>
+
+        {/* Enter Button */}
         <TouchableOpacity
-          style={styles.mapButton}
+          style={styles.enterButton}
           onPress={() => router.push('/maps')}
+          activeOpacity={0.8}
         >
-          <ThemedText style={styles.mapButtonText}>Open Map Viewer</ThemedText>
+          <MaterialCommunityIcons 
+            name="map" 
+            size={24 * scale} 
+            color="#FFFFFF" 
+            style={styles.buttonIcon}
+          />
+          <ThemedText style={styles.buttonText}>
+            Enter Maps Screen
+          </ThemedText>
         </TouchableOpacity>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText>{' '}
-          to see changes. Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({ ios: 'cmd + d', android: 'cmd + m' })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this
-          starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText>{' '}
-          to get a fresh <ThemedText type="defaultSemiBold">app</ThemedText>{' '}
-          directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      </View>
+    </ThemedView>
   );
 }
 
 const useHomeScreenStyles = function () {
   const scale = useScale();
   return StyleSheet.create({
-    titleContainer: {
+    container: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20 * scale,
+    },
+    content: {
+      width: '100%',
+      maxWidth: 500 * scale,
+      alignItems: 'center',
+      padding: 32 * scale,
+      borderRadius: 20 * scale,
+      backgroundColor: 'rgba(30, 136, 229, 0.05)',
+    },
+    iconContainer: {
+      width: 100 * scale,
+      height: 100 * scale,
+      borderRadius: 50 * scale,
+      backgroundColor: 'rgba(30, 136, 229, 0.1)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 20 * scale,
+      borderWidth: 3,
+      borderColor: 'rgba(30, 136, 229, 0.2)',
+    },
+    title: {
+      fontSize: 25 * scale,
+      fontWeight: 'bold',
+      marginBottom: 16 * scale,
+      textAlign: 'center',
+      color: '#0D47A1',
+    },
+    description: {
+      fontSize: 16 * scale,
+      textAlign: 'center',
+      lineHeight: 24 * scale,
+      marginBottom: 32 * scale,
+      paddingHorizontal: 16 * scale,
+      opacity: 0.8,
+    },
+    enterButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8 * scale,
+      justifyContent: 'center',
+      backgroundColor: '#1E88E5',
+      paddingVertical: 16 * scale,
+      paddingHorizontal: 40 * scale,
+      borderRadius: 30 * scale,
+      width: '100%',
+      maxWidth: 320 * scale,
+      shadowColor: '#1E88E5',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
     },
-    stepContainer: {
-      gap: 8 * scale,
-      marginBottom: 8 * scale,
+    buttonIcon: {
+      marginRight: 12 * scale,
     },
-    reactLogo: {
-      height: 178 * scale,
-      width: 290 * scale,
-      bottom: 0,
-      left: 0,
-      position: 'absolute',
-    },
-    mapButton: {
-      marginTop: 12 * scale,
-      paddingVertical: 12 * scale,
-      paddingHorizontal: 16 * scale,
-      backgroundColor: '#007AFF',
-      borderRadius: 8 * scale,
-      alignItems: 'center',
-    },
-    mapButtonText: {
-      color: '#fff',
-      fontWeight: '600',
-      fontSize: 16 * scale,
+    buttonText: {
+      color: '#FFFFFF',
+      fontSize: 18 * scale,
+      fontWeight: 'bold',
     },
   });
 };

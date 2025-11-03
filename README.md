@@ -1,8 +1,41 @@
-# Expo Router TV demo 👋
+# US Maps - TV-Optimized Map Viewer
 
 ![Map Application Screenshot](./assets/tv_icons/icon-1920x720.png)
 
-A React Native application built with Expo Router that provides an interactive map viewing experience optimized for TV platforms. The application features multiple map layers and is designed to work seamlessly with TV remote controls.
+A React Native application that provides interactive visualization of US maps using Esri REST API and OpenStreetMap (OSM) data. Optimized for TV platforms with full D-pad remote control navigation.
+
+This application combines the power of Esri REST API and OpenStreetMap to deliver a rich mapping experience on TV platforms. It's specifically designed for TV remote navigation, with all interactive elements fully accessible via D-pad controls.
+
+## 🌍 Map Data Sources
+
+### Esri REST API Integration
+- **Data Layers**: Access various US map layers through Esri's REST API
+- **Dynamic Updates**: Real-time data fetching and rendering
+- **Custom Styling**: Thematic mapping with customizable styles
+- **Layer Management**: Toggle and combine multiple data layers
+
+### OpenStreetMap (OSM) Integration
+- **Base Maps**: High-quality OSM tiles for base mapping
+- **Open Source**: Free and open mapping data
+- **Global Coverage**: Comprehensive worldwide map coverage
+- **Custom Tiles**: Support for custom OSM tile servers
+
+## 🎮 D-Pad Navigation
+
+### Remote Control Support
+- **Full D-Pad Navigation**: All UI elements are navigable using TV remote D-pad
+- **Focus Management**: Visual feedback for focused elements
+- **Intuitive Controls**:
+  - **Up/Down/Left/Right**: Navigate between interactive elements
+  - **Select**: Activate the focused element
+  - **Back**: Return to previous screen or close modals
+  - **Menu**: Access additional options
+
+### Implementation Details
+- Custom `useTVFocus` hook for managing focus states
+- Smooth animations for focus transitions
+- Haptic feedback (where supported)
+- Optimized for both Apple TV and Android TV remotes
 
 ## 🚀 Getting Started
 
@@ -60,6 +93,21 @@ Start the development server with live reloading:
 yarn start
 ```
 
+## 🗺️ Map Configuration
+
+### Esri REST API Setup
+1. **API Endpoints**: Configured in `app/maps/layersConfig.ts`
+2. **Layer Types**:
+   - Feature Layers
+   - Map Image Layers
+   - Vector Tile Layers
+3. **Authentication**: Add your Esri API key in `.env`
+
+### OSM Integration
+- Base map tiles from OpenStreetMap
+- Custom tile server configuration available
+- Supports standard OSM tile format
+
 ## 🛠️ Project Configuration
 
 ### Environment Setup
@@ -77,20 +125,114 @@ yarn start
    - Define colors in `constants/Colors.ts`
    - Text styles are defined in `constants/TextStyles.ts`
 
-## 🌟 Features
+## 🌟 Key Features
 
-- **TV-Optimized Navigation**: Full support for TV remote controls
-- **Expo Router**: File-based routing for better code organization
-- **Responsive Design**: Adapts to different screen sizes
-- **Performance Optimized**: Built with React Native TV for smooth performance
+## 🌐 Map Visualization Types
+
+### 1. Base Maps
+- **Street / Physical / Terrain**
+  - Detailed road networks and physical features
+  - Terrain visualization with elevation data
+  - High-resolution satellite imagery
+
+### 2. Political & Administrative Boundaries
+- **State Boundaries**
+  - Clear delineation of US states
+  - Interactive state selection
+  - Custom styling for different zoom levels
+
+- **County-Level Maps**
+  - Detailed county boundaries
+  - Population and demographic data integration
+  - Custom styling based on statistical data
+
+### 3. Thematic Maps
+- **Choropleth Maps**
+  - Color-coded by statistical data
+  - Visual representation of population density
+  - Custom color ramps and classification methods
+
+- **Heatmaps**
+  - Density visualization of point data
+  - Dynamic intensity scaling
+  - Customizable color gradients
+
+### 4. Specialized Visualizations
+- **Cluster Maps**
+  - Grouped markers for high-density areas
+  - Dynamic clustering at different zoom levels
+  - Interactive cluster exploration
+
+- **Region & Custom Boundaries**
+  - Custom geographic regions
+  - User-defined boundary visualization
+  - Multi-level administrative regions
+
+### 5. Environmental & Infrastructure
+- **Hydrology & Water Resources**
+  - River networks and water bodies
+  - Watershed boundaries
+  - Water quality monitoring points
+
+- **Utilities & Infrastructure**
+  - Power grid visualization
+  - Transportation networks
+  - Communication infrastructure
+
+### 6. Natural Hazards & Weather
+- **Weather Radar**
+  - Real-time weather data
+  - Storm tracking
+  - Precipitation visualization
+
+- **Natural Hazards**
+  - Flood zones
+  - Wildfire risk areas
+  - Seismic activity mapping
+
+### 7. Demographics
+- **Population Density**
+  - Population distribution visualization
+  - Age and gender demographics
+  - Population growth trends
+
+### TV-Optimized Experience
+- **Full D-Pad Navigation**: Complete remote control support
+- **Focus Management**: Clear visual feedback for navigation
+- **Performance**: Optimized for TV hardware
+- **Responsive UI**: Adapts to different screen sizes and aspect ratios
+
+### Developer Friendly
+- **Expo Router**: File-based routing
+- **TypeScript Support**: Type-safe codebase
+- **Modular Architecture**: Easy to extend and maintain
 - **Cross-Platform**: Works on iOS, Android, and web
 
-## Deploy
+## 🚀 Deployment
 
-Deploy on all platforms with Expo Application Services (EAS).
+### Building for TV Platforms
 
-- Deploy the website: `npx eas-cli deploy` — [Learn more](https://docs.expo.dev/eas/hosting/get-started/)
-- Deploy on iOS and Android using: `npx eas-cli build` — [Learn more](https://expo.dev/eas)
+#### Apple TV
+```bash
+yarn prebuild:tv
+expo run:ios --device "Apple TV" --configuration Release
+```
+
+#### Android TV
+```bash
+yarn prebuild:tv
+expo run:android --variant release
+```
+
+### Web Deployment
+```bash
+npx expo export -p web
+# Deploy the generated web-build directory
+```
+
+### App Store Submission
+- **Apple TV**: Submit through App Store Connect
+- **Google Play**: Upload to Google Play Console as a TV app
 
 ## TV specific file extensions
 
