@@ -1,47 +1,89 @@
 # Expo Router TV demo 👋
 
-![Apple TV screen shot](https://github.com/douglowder/examples/assets/6577821/a881466f-a7a0-4c66-b1fc-33235c466997)
-![Android TV screen shot](https://github.com/douglowder/examples/assets/6577821/815c8e01-8275-4cc1-bd57-b9c8bce1fb02)
+![Map Application Screenshot](./assets/tv_icons/icon-1920x720.png)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native application built with Expo Router that provides an interactive map viewing experience optimized for TV platforms. The application features multiple map layers and is designed to work seamlessly with TV remote controls.
 
-This project uses
+## 🚀 Getting Started
 
-- the [React Native TV fork](https://github.com/react-native-tvos/react-native-tvos), which supports both phone (Android and iOS) and TV (Android TV and Apple TV) targets
-- the [React Native TV config plugin](https://github.com/react-native-tvos/config-tv/tree/main/packages/config-tv) to allow Expo prebuild to modify the project's native files for TV builds
+### Prerequisites
 
-## 🚀 How to use
+- Node.js (v16+)
+- Yarn (recommended) or npm
+- Expo CLI (`npm install -g expo-cli`)
+- Xcode (for iOS/Apple TV development)
+- Android Studio (for Android/Android TV development)
 
-- `cd` into the project
+### Installation
 
-- For TV development:
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd usmaps
+   ```
 
-```sh
-yarn
-yarn prebuild:tv # Executes clean Expo prebuild with TV modifications
-yarn ios # Build and run for Apple TV
-yarn android # Build for Android TV
-yarn web # Run the project on web from localhost
+2. Install dependencies:
+   ```bash
+   yarn install
+   ```
+
+### Running the App
+
+#### For TV Development:
+```bash
+# For Apple TV
+yarn prebuild:tv
+yarn ios
+
+# For Android TV
+yarn prebuild:tv
+yarn android
+
+# For web development
+yarn web
 ```
-- For mobile development:
 
-```sh
-yarn
-yarn prebuild # Executes Expo prebuild with no TV modifications
-yarn ios # Build and run for iOS
-yarn android # Build for Android mobile
-yarn web # Run the project on web from localhost
+#### For Mobile Development:
+```bash
+# For iOS
+yarn prebuild
+yarn ios
+
+# For Android
+yarn prebuild
+yarn android
 ```
 
-> **_NOTE:_**
-> Setting the environment variable `EXPO_TV=1` enables the `@react-native-tvos/config-tv` plugin to modify the project for TV.
-> This can also be done by setting the parameter `isTV` to true in the `app.json`.
+#### Development Server
+Start the development server with live reloading:
+```bash
+yarn start
+```
 
-## Development
+## 🛠️ Project Configuration
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Environment Setup
 
-This project includes a [demo](./components/EventHandlingDemo.tsx) showing how to use React Native TV APIs to highlight controls as the user navigates the screen with the remote control.
+1. **Expo Configuration**:
+   - Update `app.json` for app metadata and configuration
+   - Configure TV-specific settings in `app.json` under the `"tv"` key
+
+2. **TypeScript Support**:
+   - Type definitions are available in the `types` directory
+   - Custom types can be added to `types/`
+
+3. **Theming**:
+   - Use `useColorScheme()` hook for dark/light mode support
+   - Define colors in `constants/Colors.ts`
+   - Text styles are defined in `constants/TextStyles.ts`
+
+## 🌟 Features
+
+- **TV-Optimized Navigation**: Full support for TV remote controls
+- **Expo Router**: File-based routing for better code organization
+- **Responsive Design**: Adapts to different screen sizes
+- **Performance Optimized**: Built with React Native TV for smooth performance
+- **Cross-Platform**: Works on iOS, Android, and web
 
 ## Deploy
 
