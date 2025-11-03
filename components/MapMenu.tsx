@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 import { useScale } from '@/hooks/useScale';
 import { LAYER_GROUPS } from '@/app/maps/layersConfig';
 import { EsriLayer } from '@/types/map';
+import { useTVFocus } from '@/hooks/useTVFocus';
 
 interface MapMenuProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ interface MapMenuProps {
   onClearLayers: () => void;
   activeLayers: Set<string>;
   onClose?: () => void;
+  onFocusChange?: (hasFocus: boolean) => void;
 }
 
 export const MapMenu: React.FC<MapMenuProps> = ({
@@ -26,13 +28,33 @@ export const MapMenu: React.FC<MapMenuProps> = ({
   onClearLayers,
   activeLayers,
   onClose,
+  onFocusChange,
 }) => {
   const scale = useScale();
   const [expandedGroup, setExpandedGroup] = useState<string | null>(
     LAYER_GROUPS[0]?.category || null
   );
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState(0);
   const slideAnim = useRef(new Animated.Value(isOpen ? 0 : -350 * scale)).current;
+  const scaleAnims = useRef<{ [key: string]: Animated.Value }>({}).current;
+
+  // Get all focusable items
+  const focusableItems = useMemo(() => {
+    const items: Array<{ type: 'clear' | 'group' | 'layer'; data: any }> = [];
+    items.push({ type: 'clear', data: null });
+    
+    LAYER_GROUPS.forEach((group) => {
+      items.push({ type: 'group', data: group });
+      if (expandedGroup === group.category) {
+        group.layers.forEach((layer) => {
+          items.push({ type: 'layer', data: layer });
+        });
+      }
+    });
+    
+    return items;
+  }, [expandedGroup]);
 
   // Animate menu slide in/out
   useEffect(() => {
@@ -41,7 +63,88 @@ export const MapMenu: React.FC<MapMenuProps> = ({
       duration: 300,
       useNativeDriver: true,
     }).start();
-  }, [isOpen, scale, slideAnim]);
+    
+    if (isOpen) {
+      setFocusedIndex(0);
+      onFocusChange?.(true);
+    } else {
+      onFocusChange?.(false);
+    }
+  }, [isOpen, scale, slideAnim, onFocusChange]);
+
+  // Handle item selection
+  const handleSelectItem = useCallback(() => {
+    const item = focusableItems[focusedIndex];
+    if (!item) return;
+
+    switch (item.type) {
+      case 'clear':
+        onClearLayers();
+        break;
+      case 'group':
+        handleGroupToggle(item.data.category);
+        break;
+      case 'layer':
+        handleLayerPress(item.data);
+        break;
+    }
+  }, [focusedIndex, focusableItems, onClearLayers]);
+
+  // TV Remote navigation
+  useTVFocus({
+    enabled: isOpen,
+    onUp: () => {
+      console.log('[MapMenu] UP - Current index:', focusedIndex);
+      setFocusedIndex((prev) => {
+        const newIndex = Math.max(0, prev - 1);
+        console.log('[MapMenu] New index:', newIndex);
+        return newIndex;
+      });
+    },
+    onDown: () => {
+      console.log('[MapMenu] DOWN - Current index:', focusedIndex);
+      setFocusedIndex((prev) => {
+        const newIndex = Math.min(focusableItems.length - 1, prev + 1);
+        console.log('[MapMenu] New index:', newIndex);
+        return newIndex;
+      });
+    },
+    onSelect: () => {
+      console.log('[MapMenu] SELECT - Focused index:', focusedIndex);
+      handleSelectItem();
+    },
+    onBack: () => {
+      console.log('[MapMenu] BACK - Closing drawer');
+      if (onClose) {
+        onClose();
+        return true;
+      }
+      return false;
+    },
+  });
+
+  // Animate focused item
+  useEffect(() => {
+    const item = focusableItems[focusedIndex];
+    if (!item) return;
+
+    const key = item.type === 'clear' ? 'clear' : 
+                item.type === 'group' ? `group-${item.data.category}` : 
+                `layer-${item.data.id}`;
+
+    if (!scaleAnims[key]) {
+      scaleAnims[key] = new Animated.Value(1);
+    }
+
+    // Reset all animations
+    Object.keys(scaleAnims).forEach((k) => {
+      Animated.spring(scaleAnims[k], {
+        toValue: k === key ? 1.05 : 1,
+        friction: 5,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [focusedIndex, focusableItems, scaleAnims]);
 
   const handleLayerPress = (layer: EsriLayer) => {
     setSelectedLayerId(layer.id);
@@ -79,14 +182,23 @@ export const MapMenu: React.FC<MapMenuProps> = ({
       </View>
 
       {/* Clear All Button */}
-      <TouchableOpacity
-        style={styles.clearButton}
-        onPress={onClearLayers}
-        accessibilityLabel="Clear all layers"
-        accessibilityRole="button"
+      <Animated.View
+        style={{
+          transform: [{ scale: scaleAnims['clear'] || 1 }],
+        }}
       >
-        <Text style={styles.clearButtonText}>Clear All Layers</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.clearButton,
+            focusedIndex === 0 && styles.focusedItem,
+          ]}
+          onPress={onClearLayers}
+          accessibilityLabel="Clear all layers"
+          accessibilityRole="button"
+        >
+          <Text style={styles.clearButtonText}>Clear All Layers</Text>
+        </TouchableOpacity>
+      </Animated.View>
 
       {/* Layer Groups */}
       <ScrollView
@@ -94,82 +206,109 @@ export const MapMenu: React.FC<MapMenuProps> = ({
         showsVerticalScrollIndicator={true}
         scrollEventThrottle={16}
       >
-        {LAYER_GROUPS.map((group) => (
-          <View key={group.category} style={styles.groupContainer}>
-            {/* Group Header */}
-            <TouchableOpacity
-              style={[
-                styles.groupHeader,
-                expandedGroup === group.category && styles.groupHeaderActive,
-              ]}
-              onPress={() => handleGroupToggle(group.category)}
-              accessibilityLabel={`${group.name} layer group`}
-              accessibilityRole="button"
-              accessibilityState={{
-                expanded: expandedGroup === group.category,
-              }}
-            >
-              <Text style={styles.groupTitle}>{group.name}</Text>
-              <Text style={styles.groupToggle}>
-                {expandedGroup === group.category ? '▼' : '▶'}
-              </Text>
-            </TouchableOpacity>
+        {LAYER_GROUPS.map((group, groupIdx) => {
+          const groupItemIndex = focusableItems.findIndex(
+            (item) => item.type === 'group' && item.data?.category === group.category
+          );
+          const isFocused = focusedIndex === groupItemIndex;
+          const groupKey = `group-${group.category}`;
 
-            {/* Layer Items */}
-            {expandedGroup === group.category && (
-              <View style={styles.layersList}>
-                {group.layers.map((layer) => {
-                  const isActive = activeLayers.has(layer.id);
-                  const isSelected = selectedLayerId === layer.id;
+          return (
+            <View key={group.category} style={styles.groupContainer}>
+              {/* Group Header */}
+              <Animated.View
+                style={{
+                  transform: [{ scale: scaleAnims[groupKey] || 1 }],
+                }}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.groupHeader,
+                    expandedGroup === group.category && styles.groupHeaderActive,
+                    isFocused && styles.focusedItem,
+                  ]}
+                  onPress={() => handleGroupToggle(group.category)}
+                  accessibilityLabel={`${group.name} layer group`}
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    expanded: expandedGroup === group.category,
+                  }}
+                >
+                  <Text style={styles.groupTitle}>{group.name}</Text>
+                  <Text style={styles.groupToggle}>
+                    {expandedGroup === group.category ? '▼' : '▶'}
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
 
-                  return (
-                    <TouchableOpacity
-                      key={layer.id}
-                      style={[
-                        styles.layerItem,
-                        isActive && styles.layerItemActive,
-                        isSelected && styles.layerItemSelected,
-                      ]}
-                      onPress={() => handleLayerPress(layer)}
-                      accessibilityLabel={layer.name}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: isActive }}
-                    >
-                      <View style={styles.layerItemContent}>
-                        <View
+              {/* Layer Items */}
+              {expandedGroup === group.category && (
+                <View style={styles.layersList}>
+                  {group.layers.map((layer) => {
+                    const layerItemIndex = focusableItems.findIndex(
+                      (item) => item.type === 'layer' && item.data?.id === layer.id
+                    );
+                    const isLayerFocused = focusedIndex === layerItemIndex;
+                    const isActive = activeLayers.has(layer.id);
+                    const isSelected = selectedLayerId === layer.id;
+                    const layerKey = `layer-${layer.id}`;
+
+                    return (
+                      <Animated.View
+                        key={layer.id}
+                        style={{
+                          transform: [{ scale: scaleAnims[layerKey] || 1 }],
+                        }}
+                      >
+                        <TouchableOpacity
                           style={[
-                            styles.layerCheckbox,
-                            isActive && styles.layerCheckboxActive,
-                            { backgroundColor: layer.color || '#1f77b4' },
+                            styles.layerItem,
+                            isActive && styles.layerItemActive,
+                            isSelected && styles.layerItemSelected,
+                            isLayerFocused && styles.focusedItem,
                           ]}
+                          onPress={() => handleLayerPress(layer)}
+                          accessibilityLabel={layer.name}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: isActive }}
                         >
-                          {isActive && (
-                            <Text style={styles.checkmark}>✓</Text>
-                          )}
-                        </View>
-                        <View style={styles.layerInfo}>
-                          <Text
-                            style={[
-                              styles.layerName,
-                              isActive && styles.layerNameActive,
-                            ]}
-                          >
-                            {layer.name}
-                          </Text>
-                          {layer.description && (
-                            <Text style={styles.layerDescription}>
-                              {layer.description}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-        ))}
+                          <View style={styles.layerItemContent}>
+                            <View
+                              style={[
+                                styles.layerCheckbox,
+                                isActive && styles.layerCheckboxActive,
+                                { backgroundColor: layer.color || '#1f77b4' },
+                              ]}
+                            >
+                              {isActive && (
+                                <Text style={styles.checkmark}>✓</Text>
+                              )}
+                            </View>
+                            <View style={styles.layerInfo}>
+                              <Text
+                                style={[
+                                  styles.layerName,
+                                  isActive && styles.layerNameActive,
+                                ]}
+                              >
+                                {layer.name}
+                              </Text>
+                              {layer.description && (
+                                <Text style={styles.layerDescription}>
+                                  {layer.description}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      </Animated.View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        })}
       </ScrollView>
 
       {/* Footer Info */}
@@ -190,11 +329,11 @@ const useMapMenuStyles = (scale: number) =>
       top: 0,
       bottom: 0,
       width: 350 * scale,
-      backgroundColor: '#ffffff',
+      backgroundColor: '#000000',
       zIndex: 1000,
-      shadowColor: '#000',
+      shadowColor: '#FFD700',
       shadowOffset: { width: 2, height: 0 },
-      shadowOpacity: 0.25,
+      shadowOpacity: 0.3,
       shadowRadius: 8,
       elevation: 8,
       display: 'flex',
@@ -205,7 +344,7 @@ const useMapMenuStyles = (scale: number) =>
       paddingHorizontal: 16 * scale,
       paddingVertical: 12 * scale,
       borderBottomWidth: 1,
-      borderBottomColor: '#e0e0e0',
+      borderBottomColor: '#333333',
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
@@ -214,18 +353,18 @@ const useMapMenuStyles = (scale: number) =>
     headerTitle: {
       fontSize: 18 * scale,
       fontWeight: '700',
-      color: '#1a1a1a',
+      color: '#ffffff',
     },
 
     closeButton: {
       padding: 8 * scale,
       borderRadius: 4 * scale,
-      backgroundColor: '#f0f0f0',
+      backgroundColor: '#333333',
     },
 
     closeButtonText: {
       fontSize: 18 * scale,
-      color: '#666',
+      color: '#ffffff',
     },
 
     clearButton: {
@@ -244,6 +383,16 @@ const useMapMenuStyles = (scale: number) =>
       fontSize: 14 * scale,
     },
 
+    focusedItem: {
+      shadowColor: '#FFD700',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.8,
+      shadowRadius: 10,
+      elevation: 10,
+      borderWidth: 2,
+      borderColor: '#FFD700',
+    },
+
     scrollView: {
       flex: 1,
       paddingHorizontal: 8 * scale,
@@ -259,25 +408,25 @@ const useMapMenuStyles = (scale: number) =>
       alignItems: 'center',
       paddingHorizontal: 12 * scale,
       paddingVertical: 10 * scale,
-      backgroundColor: '#f8f9fa',
+      backgroundColor: '#1a1a1a',
       borderRadius: 6 * scale,
       marginVertical: 4 * scale,
     },
 
     groupHeaderActive: {
-      backgroundColor: '#e9ecef',
+      backgroundColor: '#2a2a2a',
     },
 
     groupTitle: {
       fontSize: 15 * scale,
       fontWeight: '600',
-      color: '#1a1a1a',
+      color: '#ffffff',
       flex: 1,
     },
 
     groupToggle: {
       fontSize: 12 * scale,
-      color: '#666',
+      color: '#999999',
       marginLeft: 8 * scale,
     },
 
@@ -290,19 +439,19 @@ const useMapMenuStyles = (scale: number) =>
       paddingHorizontal: 12 * scale,
       paddingVertical: 10 * scale,
       marginVertical: 4 * scale,
-      backgroundColor: '#f5f5f5',
+      backgroundColor: '#1a1a1a',
       borderRadius: 6 * scale,
       borderLeftWidth: 3 * scale,
       borderLeftColor: 'transparent',
     },
 
     layerItemActive: {
-      backgroundColor: '#e8f5e9',
+      backgroundColor: '#1a3a1a',
       borderLeftColor: '#4caf50',
     },
 
     layerItemSelected: {
-      backgroundColor: '#fff3e0',
+      backgroundColor: '#3a2a1a',
       borderLeftColor: '#ff9800',
     },
 
@@ -317,7 +466,7 @@ const useMapMenuStyles = (scale: number) =>
       height: 20 * scale,
       borderRadius: 4 * scale,
       borderWidth: 2 * scale,
-      borderColor: '#ccc',
+      borderColor: '#666666',
       justifyContent: 'center',
       alignItems: 'center',
       marginTop: 2 * scale,
@@ -342,17 +491,17 @@ const useMapMenuStyles = (scale: number) =>
     layerName: {
       fontSize: 13 * scale,
       fontWeight: '500',
-      color: '#333',
+      color: '#ffffff',
     },
 
     layerNameActive: {
-      color: '#2e7d32',
+      color: '#66bb6a',
       fontWeight: '600',
     },
 
     layerDescription: {
       fontSize: 11 * scale,
-      color: '#999',
+      color: '#999999',
       marginTop: 2 * scale,
     },
 
@@ -360,13 +509,13 @@ const useMapMenuStyles = (scale: number) =>
       paddingHorizontal: 16 * scale,
       paddingVertical: 10 * scale,
       borderTopWidth: 1,
-      borderTopColor: '#e0e0e0',
-      backgroundColor: '#fafafa',
+      borderTopColor: '#333333',
+      backgroundColor: '#0a0a0a',
     },
 
     footerText: {
       fontSize: 12 * scale,
-      color: '#666',
+      color: '#999999',
       fontWeight: '500',
     },
   });
