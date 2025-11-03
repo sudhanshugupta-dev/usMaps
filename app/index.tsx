@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import { Image, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { HelloWave } from '@/components/HelloWave';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
@@ -7,6 +8,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { useScale } from '@/hooks/useScale';
 
 export default function HomeScreen() {
+  const router = useRouter();
   const styles = useHomeScreenStyles();
   return (
     <ParallaxScrollView
@@ -21,6 +23,18 @@ export default function HomeScreen() {
       <ThemedView style={styles.titleContainer}>
         <ThemedText type="title">Welcome!</ThemedText>
         <HelloWave />
+      </ThemedView>
+      <ThemedView style={styles.stepContainer}>
+        <ThemedText type="subtitle">🗺️ Map Viewer</ThemedText>
+        <ThemedText>
+          Explore interactive maps with multiple layers including satellite imagery, political boundaries, demographics, and more.
+        </ThemedText>
+        <TouchableOpacity
+          style={styles.mapButton}
+          onPress={() => router.push('/maps')}
+        >
+          <ThemedText style={styles.mapButtonText}>Open Map Viewer</ThemedText>
+        </TouchableOpacity>
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="subtitle">Step 1: Try it</ThemedText>
@@ -74,6 +88,19 @@ const useHomeScreenStyles = function () {
       bottom: 0,
       left: 0,
       position: 'absolute',
+    },
+    mapButton: {
+      marginTop: 12 * scale,
+      paddingVertical: 12 * scale,
+      paddingHorizontal: 16 * scale,
+      backgroundColor: '#007AFF',
+      borderRadius: 8 * scale,
+      alignItems: 'center',
+    },
+    mapButtonText: {
+      color: '#fff',
+      fontWeight: '600',
+      fontSize: 16 * scale,
     },
   });
 };
