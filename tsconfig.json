@@ -3,6 +3,10 @@
   "compilerOptions": {
     "strict": true,
     "lib": ["es2015", "dom"],
+    "jsx": "react-native",
+    "esModuleInterop": true,
+    "downlevelIteration": true,
+    "target": "es2015",
     "paths": {
       "@/*": [
         "./*"
