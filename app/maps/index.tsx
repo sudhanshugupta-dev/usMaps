@@ -399,12 +399,16 @@ export default function MapsScreen() {
            * Create GeoJSON layer with styling
            */
           function createGeoJSONLayer(data, layerId, color) {
+            console.log('[createGeoJSONLayer] Creating GeoJSON layer for', layerId, 'with', data.features?.length || 0, 'features');
+            
             return L.geoJSON(data, {
-              style: {
-                color: color,
-                weight: 2,
-                opacity: 0.7,
-                fillOpacity: 0.4,
+              style: function(feature) {
+                return {
+                  color: color,
+                  weight: 2,
+                  opacity: 0.7,
+                  fillOpacity: 0.4,
+                };
               },
               pointToLayer: (feature, latlng) => {
                 return L.circleMarker(latlng, {
@@ -419,10 +423,12 @@ export default function MapsScreen() {
               onEachFeature: (feature, layer) => {
                 if (feature.properties) {
                   const props = Object.entries(feature.properties)
-                    .slice(0, 3)
+                    .slice(0, 5)
                     .map(([k, v]) => \`<strong>\${k}:</strong> \${v}\`)
                     .join('<br>');
-                  layer.bindPopup(props);
+                  if (props) {
+                    layer.bindPopup(props);
+                  }
                 }
               },
             });
@@ -432,54 +438,181 @@ export default function MapsScreen() {
            * Create heatmap layer from GeoJSON points
            */
           function createHeatmapLayer(data) {
+            console.log('[createHeatmapLayer] Starting heatmap creation with', data?.features?.length || 0, 'features');
+            
+            if (!data || !data.features || data.features.length === 0) {
+              console.error('[createHeatmapLayer] ❌ No features in data');
+              return null;
+            }
+            
             const points = [];
-            if (data.features) {
-              data.features.forEach((feature) => {
-                if (
-                  feature.geometry.type === 'Point' ||
-                  feature.geometry.coordinates
-                ) {
-                  const coords = feature.geometry.coordinates;
-                  const intensity = feature.properties?.intensity || 0.5;
-                  points.push([coords[1], coords[0], intensity]);
+            let processedCount = 0;
+            let errorCount = 0;
+            
+            data.features.forEach((feature, index) => {
+              try {
+                if (!feature.geometry) {
+                  console.warn(\`[createHeatmapLayer] Feature \${index} has no geometry\`);
+                  errorCount++;
+                  return;
+                }
+                
+                const coords = feature.geometry.coordinates;
+                if (!coords || coords.length < 2) {
+                  console.warn(\`[createHeatmapLayer] Feature \${index} has invalid coordinates\`);
+                  errorCount++;
+                  return;
+                }
+                
+                // Try to extract intensity from various possible field names
+                let intensity = 0.5;
+                if (feature.properties) {
+                  intensity = feature.properties.magnitude || 
+                             feature.properties.intensity || 
+                             feature.properties.depth || 
+                             feature.properties.value ||
+                             feature.properties.POP2007 ||
+                             0.5;
+                  // Normalize intensity to 0-1 range
+                  if (intensity > 1) {
+                    intensity = Math.min(intensity / 10000000, 1);
+                  }
+                }
+                
+                points.push([coords[1], coords[0], intensity]);
+                processedCount++;
+              } catch (e) {
+                console.warn(\`[createHeatmapLayer] Error processing feature \${index}:\`, e.message);
+                errorCount++;
+              }
+            });
+            
+            console.log(\`[createHeatmapLayer] Processed: \${processedCount}, Errors: \${errorCount}, Points: \${points.length}\`);
+            
+            if (points.length === 0) {
+              console.log('[createHeatmapLayer] ⚠️ No valid heatmap points, falling back to GeoJSON layer');
+              // Fallback: show as GeoJSON layer with heatmap styling
+              return L.geoJSON(data, {
+                style: {
+                  color: '#9467bd',
+                  weight: 2,
+                  opacity: 0.7,
+                  fillOpacity: 0.4,
+                },
+                onEachFeature: (feature, layer) => {
+                  if (feature.properties) {
+                    const props = Object.entries(feature.properties)
+                      .slice(0, 5)
+                      .map(([k, v]) => \`<strong>\${k}:</strong> \${v}\`)
+                      .join('<br>');
+                    if (props) {
+                      layer.bindPopup(props);
+                    }
+                  }
                 }
               });
             }
-            return L.heatLayer(points, {
-              radius: 25,
-              blur: 15,
-              maxZoom: 17,
-              gradient: {
-                0.0: '#0000ff',
-                0.25: '#00ff00',
-                0.5: '#ffff00',
-                0.75: '#ff7f00',
-                1.0: '#ff0000',
-              },
-            });
+            
+            try {
+              const heatmapLayer = L.heatLayer(points, {
+                radius: 25,
+                blur: 15,
+                maxZoom: 17,
+                gradient: {
+                  0.0: '#0000ff',
+                  0.25: '#00ff00',
+                  0.5: '#ffff00',
+                  0.75: '#ff7f00',
+                  1.0: '#ff0000',
+                },
+              });
+              console.log('[createHeatmapLayer] ✅ Heatmap layer created successfully');
+              return heatmapLayer;
+            } catch (e) {
+              console.error('[createHeatmapLayer] ❌ Error creating heatmap layer:', e.message);
+              // Fallback to GeoJSON
+              return L.geoJSON(data, {
+                style: {
+                  color: '#9467bd',
+                  weight: 2,
+                  opacity: 0.7,
+                  fillOpacity: 0.4,
+                },
+                onEachFeature: (feature, layer) => {
+                  if (feature.properties) {
+                    const props = Object.entries(feature.properties)
+                      .slice(0, 5)
+                      .map(([k, v]) => \`<strong>\${k}:</strong> \${v}\`)
+                      .join('<br>');
+                    if (props) {
+                      layer.bindPopup(props);
+                    }
+                  }
+                }
+              });
+            }
           }
 
           /**
            * Create marker cluster layer from GeoJSON points
            */
           function createClusterLayer(data) {
-            const markers = L.markerClusterGroup();
-            if (data.features) {
-              data.features.forEach((feature) => {
-                if (feature.geometry.type === 'Point') {
-                  const coords = feature.geometry.coordinates;
-                  const marker = L.marker([coords[1], coords[0]]);
-                  if (feature.properties) {
-                    const props = Object.entries(feature.properties)
-                      .slice(0, 3)
-                      .map(([k, v]) => \`<strong>\${k}:</strong> \${v}\`)
-                      .join('<br>');
+            console.log('[createClusterLayer] Starting cluster creation with', data?.features?.length || 0, 'features');
+            
+            if (!data || !data.features || data.features.length === 0) {
+              console.error('[createClusterLayer] ❌ No features in data');
+              return null;
+            }
+            
+            const markers = L.markerClusterGroup({
+              maxClusterRadius: 80,
+              disableClusteringAtZoom: 17,
+            });
+            
+            let addedCount = 0;
+            let errorCount = 0;
+            
+            data.features.forEach((feature, index) => {
+              try {
+                if (!feature.geometry) {
+                  console.warn(\`[createClusterLayer] Feature \${index} has no geometry\`);
+                  errorCount++;
+                  return;
+                }
+                
+                const coords = feature.geometry.coordinates;
+                if (!coords || coords.length < 2) {
+                  console.warn(\`[createClusterLayer] Feature \${index} has invalid coordinates\`);
+                  errorCount++;
+                  return;
+                }
+                
+                const marker = L.marker([coords[1], coords[0]]);
+                if (feature.properties) {
+                  const props = Object.entries(feature.properties)
+                    .slice(0, 5)
+                    .map(([k, v]) => \`<strong>\${k}:</strong> \${v}\`)
+                    .join('<br>');
+                  if (props) {
                     marker.bindPopup(props);
                   }
-                  markers.addLayer(marker);
                 }
-              });
+                markers.addLayer(marker);
+                addedCount++;
+              } catch (e) {
+                console.warn(\`[createClusterLayer] Error processing feature \${index}:\`, e.message);
+                errorCount++;
+              }
+            });
+            
+            console.log(\`[createClusterLayer] Added: \${addedCount}, Errors: \${errorCount}\`);
+            
+            if (addedCount === 0) {
+              console.error('[createClusterLayer] ❌ No markers added to cluster');
+              return null;
             }
+            
+            console.log('[createClusterLayer] ✅ Cluster layer created successfully');
             return markers;
           }
 
@@ -521,13 +654,25 @@ export default function MapsScreen() {
                 if (layerId.includes('heatmap')) {
                   console.log(\`[loadLayer] Creating heatmap layer for \${layerId}\`);
                   layer = createHeatmapLayer(data);
+                  console.log(\`[loadLayer] Heatmap layer created:\`, layer ? 'SUCCESS' : 'FAILED');
+                  if (!layer) {
+                    throw new Error('Heatmap layer creation returned null');
+                  }
                 } else if (layerId.includes('cluster')) {
                   console.log(\`[loadLayer] Creating cluster layer for \${layerId}\`);
                   layer = createClusterLayer(data);
+                  console.log(\`[loadLayer] Cluster layer created:\`, layer ? 'SUCCESS' : 'FAILED');
+                  if (!layer) {
+                    throw new Error('Cluster layer creation returned null');
+                  }
                 } else {
                   console.log(\`[loadLayer] Creating GeoJSON layer for \${layerId}\`);
                   const color = getLayerColor(layerId);
                   layer = createGeoJSONLayer(data, layerId, color);
+                  console.log(\`[loadLayer] GeoJSON layer created:\`, layer ? 'SUCCESS' : 'FAILED');
+                  if (!layer) {
+                    throw new Error('GeoJSON layer creation returned null');
+                  }
                 }
               } else if (layerType === 'tile') {
                 console.log(\`[loadLayer] Creating tile layer for \${layerId}\`);
@@ -541,18 +686,22 @@ export default function MapsScreen() {
               if (layer) {
                 layersRegistry[layerId] = layer;
                 layerStates[layerId] = { loaded: true, visible: false };
-                console.log(\`[loadLayer] Layer \${layerId} loaded successfully and stored in registry\`);
+                console.log(\`[loadLayer] ✅ Layer \${layerId} loaded successfully and stored in registry\`);
+                console.log(\`[loadLayer] Registry keys: \${Object.keys(layersRegistry).join(', ')}\`);
                 sendMessage('layerLoaded', { layerId, success: true });
+                return true;
               } else {
                 throw new Error('Failed to create layer object');
               }
             } catch (error) {
-              console.error(\`[loadLayer] Error loading layer \${layerId}:\`, error);
+              console.error(\`[loadLayer] ❌ Error loading layer \${layerId}:\`, error);
+              console.error(\`[loadLayer] Error details:\`, error.message, error.stack);
               sendMessage('layerLoaded', {
                 layerId,
                 success: false,
                 message: error.message,
               });
+              return false;
             } finally {
               setLoading(false);
             }
@@ -591,9 +740,10 @@ export default function MapsScreen() {
               activeLayers.add(layerId);
             }
 
-            console.log(\`[toggleLayer] Layer \${layerId} is now \${state.visible ? 'visible' : 'hidden'}\`);
+            console.log(\`[toggleLayer] ✅ Layer \${layerId} is now \${state.visible ? 'visible' : 'hidden'}\`);
+            console.log(\`[toggleLayer] Active layers: \${Array.from(activeLayers).join(', ')}\`);
             updateInfoPanel();
-            sendMessage('layerToggled', { layerId, visible: state.visible });
+            sendMessage('layerToggled', { layerId, visible: state.visible, success: true });
             return state.visible;
           }
 
@@ -734,7 +884,6 @@ export default function MapsScreen() {
           scalesPageToFit={true}
           style={styles.webView}
           scrollEnabled={true}
-          pinchGestureEnabled={true}
         />
 
         {/* Menu Toggle Button */}

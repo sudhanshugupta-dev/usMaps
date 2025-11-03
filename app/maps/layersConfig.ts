@@ -24,19 +24,7 @@ export const ALL_LAYERS: EsriLayer[] = [
     description: 'World street map with detailed roads and labels',
   },
 
-  // 2. Satellite Map
-  {
-    id: 'satellite',
-    name: 'Satellite Imagery',
-    url: `${ESRI_BASE_URL}/World_Imagery/MapServer`,
-    type: 'tile',
-    category: 'satellite',
-    enabled: false,
-    opacity: 0.8,
-    description: 'Satellite imagery from Esri',
-  },
-
-  // 3. Political / State Boundaries
+  // 2. Political / State Boundaries
   {
     id: 'political-boundaries',
     name: 'Political Boundaries',
@@ -62,30 +50,30 @@ export const ALL_LAYERS: EsriLayer[] = [
     description: 'County-level administrative boundaries',
   },
 
-  // 5. Choropleth (color-coded by data)
+  // 5. Choropleth (color-coded by data) - Same as Water Hydrants
   {
     id: 'choropleth',
     name: 'Choropleth Map',
-    url: `${ESRI_BASE_URL}/Census/MapServer`,
+    url: 'https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/WaterHydrants_WM/FeatureServer/0/query?where=1=1&outFields=*&f=geojson',
     type: 'geojson',
     category: 'choropleth',
     enabled: false,
     opacity: 0.7,
     color: '#d62728',
-    description: 'Color-coded data visualization by region',
+    description: 'Choropleth visualization using water hydrants data',
   },
 
-  // 6. Heatmap (density)
+  // 6. Heatmap (density) - Using Choropleth API
   {
     id: 'heatmap',
-    name: 'Earthquakes Heatmap',
-    url: 'https://sampleserver6.arcgisonline.com/arcgis/rest/services/Earthquakes_Since1970/MapServer/0/query?where=1=1&outFields=*&f=geojson',
+    name: 'Heatmap',
+    url: 'https://sampleserver6.arcgisonline.com/arcgis/rest/services/Census/MapServer/3/query?where=1=1&outFields=STATE_NAME,POP2007&f=geojson',
     type: 'geojson',
     category: 'heatmap',
     enabled: false,
     opacity: 0.6,
     color: '#9467bd',
-    description: 'Earthquake density heatmap visualization',
+    description: 'Population density heatmap visualization',
   },
 
   // 7. Cluster Map (grouped markers)
@@ -114,30 +102,30 @@ export const ALL_LAYERS: EsriLayer[] = [
     description: 'Custom regional boundary definitions',
   },
 
-  // 9. Hydrology / Water
+  // 9. Hydrology / Water - Same as Regions
   {
     id: 'hydrology',
-    name: 'Hydrology & Water',
-    url: `${ESRI_BASE_URL}/Hydrography/MapServer`,
+    name: 'Water Network',
+    url: 'https://sampleserver6.arcgisonline.com/arcgis/rest/services/USA/MapServer/3/query?where=1=1&outFields=*&f=geojson',
     type: 'geojson',
     category: 'hydrology',
     enabled: false,
     opacity: 0.7,
     color: '#17becf',
-    description: 'Water bodies, rivers, and hydrological features',
+    description: 'Water network visualization using regional boundaries data',
   },
 
-  // 10. Utilities / Infrastructure
+  // 10. Utilities / Infrastructure - Same as Choropleth
   {
     id: 'utilities',
-    name: 'Utilities & Infrastructure',
-    url: `${ESRI_BASE_URL}/Utilities/MapServer`,
+    name: 'Water Hydrants',
+    url: 'https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/WaterHydrants_WM/FeatureServer/0/query?where=1=1&outFields=*&f=geojson',
     type: 'geojson',
     category: 'utilities',
     enabled: false,
     opacity: 0.6,
     color: '#bcbd22',
-    description: 'Infrastructure and utility networks',
+    description: 'Water hydrant locations and infrastructure',
   },
 
   // 11. Natural Hazards / Weather Radar
@@ -157,13 +145,13 @@ export const ALL_LAYERS: EsriLayer[] = [
   {
     id: 'demographics',
     name: 'Demographics & Population',
-    url: `${ESRI_BASE_URL}/Census/MapServer/2`,
+    url: 'https://sampleserver6.arcgisonline.com/arcgis/rest/services/Census/MapServer/3/query?where=1=1&outFields=STATE_NAME,POP2000,POP2007&f=geojson',
     type: 'geojson',
     category: 'demographics',
     enabled: false,
     opacity: 0.65,
     color: '#98df8a',
-    description: 'Demographic and population statistics',
+    description: 'Demographic and population statistics with historical data',
   },
 ];
 
@@ -175,11 +163,6 @@ export const LAYER_GROUPS: LayerGroup[] = [
     category: 'base',
     name: '🏙️ Base Maps',
     layers: ALL_LAYERS.filter((l) => l.category === 'base'),
-  },
-  {
-    category: 'satellite',
-    name: '🛰️ Satellite',
-    layers: ALL_LAYERS.filter((l) => l.category === 'satellite'),
   },
   {
     category: 'political',
