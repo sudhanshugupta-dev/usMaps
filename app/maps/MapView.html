@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>US Maps - Leaflet Viewer</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+  />
+  <!-- Leaflet JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <!-- Leaflet Heatmap Plugin -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-heat/0.2.0/leaflet-heat.min.js"></script>
+
+  <!-- Leaflet MarkerCluster Plugin -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.1/MarkerCluster.min.css"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.1/MarkerCluster.Default.min.css"
+  />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.1/leaflet.markercluster.min.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+        Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    .map-controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-button {
+      padding: 8px 12px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .control-button:hover {
+      background: #0056b3;
+    }
+
+    .control-button:active {
+      background: #003d82;
+    }
+
+    .info-panel {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      max-width: 300px;
+      font-size: 12px;
+      color: #333;
+    }
+
+    .layer-status {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .layer-badge {
+      background: #e9ecef;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #495057;
+    }
+
+    .layer-badge.active {
+      background: #28a745;
+      color: white;
+    }
+
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2000;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 20px 40px;
+      border-radius: 8px;
+      font-size: 16px;
+      display: none;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    .legend {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      max-width: 250px;
+      font-size: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="loading" id="loading">Loading map...</div>
+  <div class="info-panel" id="infoPanel">
+    <strong>Map Status</strong>
+    <div class="layer-status" id="layerStatus"></div>
+  </div>
+
+  <script>
+    // ============================================================================
+    // MAP INITIALIZATION
+    // ============================================================================
+
+    // Initialize map centered on USA
+    const map = L.map('map').setView([37.8, -96], 4);
+
+    // Add OpenStreetMap base layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution:
+        '© OpenStreetMap contributors | Map data © OpenStreetMap contributors',
+    }).addTo(map);
+
+    // ============================================================================
+    // LAYER REGISTRY & STATE MANAGEMENT
+    // ============================================================================
+
+    const layersRegistry = {};
+    const layerStates = {};
+    let activeLayers = new Set();
+
+    // ============================================================================
+    // UTILITY FUNCTIONS
+    // ============================================================================
+
+    /**
+     * Show/hide loading indicator
+     */
+    function setLoading(show) {
+      const loadingEl = document.getElementById('loading');
+      if (show) {
+        loadingEl.classList.add('active');
+      } else {
+        loadingEl.classList.remove('active');
+      }
+    }
+
+    /**
+     * Update info panel with active layers
+     */
+    function updateInfoPanel() {
+      const statusEl = document.getElementById('layerStatus');
+      statusEl.innerHTML = Array.from(activeLayers)
+        .map(
+          (id) =>
+            `<span class="layer-badge active">${id.replace(/-/g, ' ')}</span>`
+        )
+        .join('');
+    }
+
+    /**
+     * Send message to React Native
+     */
+    function sendMessage(type, data = {}) {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({ type, ...data })
+        );
+      }
+    }
+
+    /**
+     * Fetch GeoJSON from Esri endpoint
+     */
+    async function fetchGeoJSON(url) {
+      try {
+        const response = await fetch(`${url}?f=geojson`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching GeoJSON:', error);
+        return null;
+      }
+    }
+
+    /**
+     * Create a color for a layer based on its ID
+     */
+    function getLayerColor(layerId) {
+      const colors = {
+        'street-base': '#1f77b4',
+        satellite: '#ff7f0e',
+        'political-boundaries': '#ff7f0e',
+        'county-map': '#2ca02c',
+        choropleth: '#d62728',
+        heatmap: '#9467bd',
+        'cluster-map': '#8c564b',
+        'region-boundaries': '#e377c2',
+        hydrology: '#17becf',
+        utilities: '#bcbd22',
+        hazards: '#ff9896',
+        demographics: '#98df8a',
+      };
+      return colors[layerId] || '#1f77b4';
+    }
+
+    /**
+     * Create GeoJSON layer with styling
+     */
+    function createGeoJSONLayer(data, layerId, color) {
+      return L.geoJSON(data, {
+        style: {
+          color: color,
+          weight: 2,
+          opacity: 0.7,
+          fillOpacity: 0.4,
+        },
+        pointToLayer: (feature, latlng) => {
+          return L.circleMarker(latlng, {
+            radius: 5,
+            fillColor: color,
+            color: '#fff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8,
+          });
+        },
+        onEachFeature: (feature, layer) => {
+          if (feature.properties) {
+            const props = Object.entries(feature.properties)
+              .slice(0, 3)
+              .map(([k, v]) => `<strong>${k}:</strong> ${v}`)
+              .join('<br>');
+            layer.bindPopup(props);
+          }
+        },
+      });
+    }
+
+    /**
+     * Create heatmap layer from GeoJSON points
+     */
+    function createHeatmapLayer(data) {
+      const points = [];
+      if (data.features) {
+        data.features.forEach((feature) => {
+          if (
+            feature.geometry.type === 'Point' ||
+            feature.geometry.coordinates
+          ) {
+            const coords = feature.geometry.coordinates;
+            const intensity = feature.properties?.intensity || 0.5;
+            points.push([coords[1], coords[0], intensity]);
+          }
+        });
+      }
+      return L.heatLayer(points, {
+        radius: 25,
+        blur: 15,
+        maxZoom: 17,
+        gradient: {
+          0.0: '#0000ff',
+          0.25: '#00ff00',
+          0.5: '#ffff00',
+          0.75: '#ff7f00',
+          1.0: '#ff0000',
+        },
+      });
+    }
+
+    /**
+     * Create marker cluster layer from GeoJSON points
+     */
+    function createClusterLayer(data) {
+      const markers = L.markerClusterGroup();
+      if (data.features) {
+        data.features.forEach((feature) => {
+          if (feature.geometry.type === 'Point') {
+            const coords = feature.geometry.coordinates;
+            const marker = L.marker([coords[1], coords[0]]);
+            if (feature.properties) {
+              const props = Object.entries(feature.properties)
+                .slice(0, 3)
+                .map(([k, v]) => `<strong>${k}:</strong> ${v}`)
+                .join('<br>');
+              marker.bindPopup(props);
+            }
+            markers.addLayer(marker);
+          }
+        });
+      }
+      return markers;
+    }
+
+    // ============================================================================
+    // LAYER MANAGEMENT
+    // ============================================================================
+
+    /**
+     * Load and add a layer to the map
+     */
+    async function loadLayer(layerId, url, layerType = 'geojson') {
+      if (layersRegistry[layerId]) {
+        console.log(`Layer ${layerId} already loaded`);
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        let layer = null;
+
+        if (layerType === 'geojson' || layerType === 'feature') {
+          const data = await fetchGeoJSON(url);
+          if (!data) throw new Error('Failed to fetch GeoJSON');
+
+          // Determine layer type based on layer ID
+          if (layerId.includes('heatmap')) {
+            layer = createHeatmapLayer(data);
+          } else if (layerId.includes('cluster')) {
+            layer = createClusterLayer(data);
+          } else {
+            const color = getLayerColor(layerId);
+            layer = createGeoJSONLayer(data, layerId, color);
+          }
+        } else if (layerType === 'tile') {
+          // For tile layers, use Esri tile URL
+          layer = L.tileLayer(url, {
+            maxZoom: 19,
+            attribution: 'Esri',
+          });
+        }
+
+        if (layer) {
+          layersRegistry[layerId] = layer;
+          layerStates[layerId] = { loaded: true, visible: false };
+          console.log(`Layer ${layerId} loaded successfully`);
+          sendMessage('layerLoaded', { layerId, success: true });
+        }
+      } catch (error) {
+        console.error(`Error loading layer ${layerId}:`, error);
+        sendMessage('layerLoaded', {
+          layerId,
+          success: false,
+          message: error.message,
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    /**
+     * Toggle layer visibility
+     */
+    function toggleLayer(layerId) {
+      const layer = layersRegistry[layerId];
+      if (!layer) {
+        console.warn(`Layer ${layerId} not found in registry`);
+        return false;
+      }
+
+      const state = layerStates[layerId];
+      if (state.visible) {
+        // Hide layer
+        map.removeLayer(layer);
+        state.visible = false;
+        activeLayers.delete(layerId);
+      } else {
+        // Show layer
+        layer.addTo(map);
+        state.visible = true;
+        activeLayers.add(layerId);
+      }
+
+      updateInfoPanel();
+      sendMessage('layerToggled', { layerId, visible: state.visible });
+      return state.visible;
+    }
+
+    /**
+     * Set layer opacity
+     */
+    function setLayerOpacity(layerId, opacity) {
+      const layer = layersRegistry[layerId];
+      if (!layer) return;
+
+      if (layer.setOpacity) {
+        layer.setOpacity(opacity);
+      } else if (layer.eachLayer) {
+        layer.eachLayer((sublayer) => {
+          if (sublayer.setOpacity) {
+            sublayer.setOpacity(opacity);
+          } else if (sublayer.setStyle) {
+            sublayer.setStyle({ opacity });
+          }
+        });
+      }
+
+      layerStates[layerId].opacity = opacity;
+    }
+
+    /**
+     * Clear all active layers
+     */
+    function clearAllLayers() {
+      activeLayers.forEach((layerId) => {
+        const layer = layersRegistry[layerId];
+        if (layer && layerStates[layerId].visible) {
+          map.removeLayer(layer);
+          layerStates[layerId].visible = false;
+        }
+      });
+      activeLayers.clear();
+      updateInfoPanel();
+    }
+
+    /**
+     * Fit map to bounds
+     */
+    function fitBounds(bounds) {
+      if (bounds && bounds.length === 2) {
+        map.fitBounds(bounds);
+      }
+    }
+
+    // ============================================================================
+    // MESSAGE HANDLING FROM REACT NATIVE
+    // ============================================================================
+
+    window.handleMapMessage = function (message) {
+      try {
+        const data = JSON.parse(message);
+        console.log('Received message:', data);
+
+        switch (data.type) {
+          case 'loadLayer':
+            loadLayer(data.layerId, data.url, data.layerType || 'geojson');
+            break;
+
+          case 'toggleLayer':
+            if (!layerStates[data.layerId]?.loaded) {
+              loadLayer(data.layerId, data.url, data.layerType || 'geojson');
+            }
+            setTimeout(() => toggleLayer(data.layerId), 100);
+            break;
+
+          case 'setOpacity':
+            setLayerOpacity(data.layerId, data.opacity);
+            break;
+
+          case 'clearLayers':
+            clearAllLayers();
+            break;
+
+          case 'fitBounds':
+            fitBounds(data.bounds);
+            break;
+
+          default:
+            console.warn('Unknown message type:', data.type);
+        }
+      } catch (error) {
+        console.error('Error handling message:', error);
+      }
+    };
+
+    // Expose for direct access
+    window.mapAPI = {
+      loadLayer,
+      toggleLayer,
+      setLayerOpacity,
+      clearAllLayers,
+      fitBounds,
+      getActiveLayers: () => Array.from(activeLayers),
+      getLayerRegistry: () => layersRegistry,
+    };
+
+    console.log('Map initialized successfully');
+    sendMessage('mapReady', { success: true });
+  </script>
+</body>
+</html>

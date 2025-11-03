@@ -42,6 +42,14 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="index.tsx" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="maps/index"
+          options={{
+            title: 'Map Viewer',
+            headerShown: true,
+            headerBackTitle: 'Back',
+          }}
+        />
         <Stack.Screen name="+not-found" />
       </Stack>
     </ThemeProvider>
