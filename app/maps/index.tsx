@@ -6,12 +6,15 @@ import {
   Text,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useScale } from '@/hooks/useScale';
 import { MapMenu } from '@/components/MapMenu';
 import { ALL_LAYERS } from '@/app/maps/layersConfig';
 import { EsriLayer, MapMessage } from '@/types/map';
+import { useTVFocus } from '@/hooks/useTVFocus';
+import { MAP_COORDINATES, getCoordinateByIndex } from '@/constants/mapCoordinates';
 
 const MAP_HTML_URI = require('./MapView.html');
 
@@ -21,8 +24,207 @@ export default function MapsScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set());
   const [mapReady, setMapReady] = useState(false);
+  const [menuButtonFocused, setMenuButtonFocused] = useState(true);
+  const [drawerHasFocus, setDrawerHasFocus] = useState(false);
+  const [currentCoordIndex, setCurrentCoordIndex] = useState(0);
+  const [currentZoom, setCurrentZoom] = useState(4);
+  const [zoomButtonFocused, setZoomButtonFocused] = useState<'in' | 'out' | null>(null);
+  const buttonScaleAnim = useRef(new Animated.Value(1)).current;
+  const zoomInScaleAnim = useRef(new Animated.Value(1)).current;
+  const zoomOutScaleAnim = useRef(new Animated.Value(1)).current;
 
   const styles = useMapsScreenStyles(scale);
+
+  // Animate menu button focus
+  useEffect(() => {
+    Animated.spring(buttonScaleAnim, {
+      toValue: menuButtonFocused && !menuOpen ? 1.1 : 1,
+      friction: 5,
+      useNativeDriver: true,
+    }).start();
+  }, [menuButtonFocused, menuOpen, buttonScaleAnim]);
+
+  // Animate zoom in button focus
+  useEffect(() => {
+    Animated.spring(zoomInScaleAnim, {
+      toValue: zoomButtonFocused === 'in' ? 1.1 : 1,
+      friction: 5,
+      useNativeDriver: true,
+    }).start();
+  }, [zoomButtonFocused, zoomInScaleAnim]);
+
+  // Animate zoom out button focus
+  useEffect(() => {
+    Animated.spring(zoomOutScaleAnim, {
+      toValue: zoomButtonFocused === 'out' ? 1.1 : 1,
+      friction: 5,
+      useNativeDriver: true,
+    }).start();
+  }, [zoomButtonFocused, zoomOutScaleAnim]);
+
+  // Navigate map coordinates
+  const navigateToCoordinate = (index: number) => {
+    const coord = getCoordinateByIndex(index);
+    if (mapReady && webViewRef.current) {
+      const script = `
+        if (window.map) {
+          window.map.flyTo([${coord.lat}, ${coord.lng}], ${currentZoom}, {
+            duration: 1.5
+          });
+        }
+      `;
+      webViewRef.current.injectJavaScript(script);
+    }
+  };
+
+  // Zoom controls with visual feedback - FIXED to actually zoom the map
+  const handleZoomIn = () => {
+    console.log('[MapScreen] Zoom In - Current:', currentZoom);
+    const newZoom = Math.min(currentZoom + 1, 18);
+    
+    if (newZoom === currentZoom) {
+      console.log('[MapScreen] Already at max zoom (18)');
+      return;
+    }
+    
+    setCurrentZoom(newZoom);
+    console.log('[MapScreen] New zoom:', newZoom);
+    
+    if (mapReady && webViewRef.current) {
+      const script = `
+        (function() {
+          if (window.map) {
+            try {
+              // Use Leaflet's zoom methods
+              window.map.setZoom(${newZoom}, {
+                animate: true,
+                duration: 0.5
+              });
+              console.log('Map zoomed IN to:', ${newZoom});
+            } catch (error) {
+              console.error('Zoom error:', error);
+            }
+          } else {
+            console.error('Map not available');
+          }
+        })();
+      `;
+      webViewRef.current.injectJavaScript(script);
+    }
+  };
+
+  const handleZoomOut = () => {
+    console.log('[MapScreen] Zoom Out - Current:', currentZoom);
+    const newZoom = Math.max(currentZoom - 1, 2);
+    
+    if (newZoom === currentZoom) {
+      console.log('[MapScreen] Already at min zoom (2)');
+      return;
+    }
+    
+    setCurrentZoom(newZoom);
+    console.log('[MapScreen] New zoom:', newZoom);
+    
+    if (mapReady && webViewRef.current) {
+      const script = `
+        (function() {
+          if (window.map) {
+            try {
+              // Use Leaflet's zoom methods
+              window.map.setZoom(${newZoom}, {
+                animate: true,
+                duration: 0.5
+              });
+              console.log('Map zoomed OUT to:', ${newZoom});
+            } catch (error) {
+              console.error('Zoom error:', error);
+            }
+          } else {
+            console.error('Map not available');
+          }
+        })();
+      `;
+      webViewRef.current.injectJavaScript(script);
+    }
+  };
+
+  // TV Remote control for map (when drawer closed) - DISABLED when drawer is open
+  useTVFocus({
+    enabled: !menuOpen && !drawerHasFocus && mapReady,
+    onUp: () => {
+      console.log('[MapScreen] UP');
+      if (zoomButtonFocused) {
+        // Zoom in when zoom control is focused
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`window.clickZoomIn();`);
+        }
+      } else {
+        // Navigate map
+        const newIndex = currentCoordIndex - 1;
+        setCurrentCoordIndex(newIndex);
+        navigateToCoordinate(newIndex);
+      }
+    },
+    onDown: () => {
+      console.log('[MapScreen] DOWN');
+      if (zoomButtonFocused) {
+        // Zoom out when zoom control is focused
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`window.clickZoomOut();`);
+        }
+      } else {
+        // Navigate map
+        const newIndex = currentCoordIndex + 1;
+        setCurrentCoordIndex(newIndex);
+        navigateToCoordinate(newIndex);
+      }
+    },
+    onLeft: () => {
+      console.log('[MapScreen] LEFT');
+      if (zoomButtonFocused) {
+        // Move focus from zoom control to menu button
+        setZoomButtonFocused(null);
+        setMenuButtonFocused(true);
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`window.focusZoomControl(false);`);
+        }
+      } else {
+        // Navigate map
+        const newIndex = currentCoordIndex - 1;
+        setCurrentCoordIndex(newIndex);
+        navigateToCoordinate(newIndex);
+      }
+    },
+    onRight: () => {
+      console.log('[MapScreen] RIGHT');
+      if (menuButtonFocused) {
+        // Move focus from menu button to zoom control
+        setMenuButtonFocused(false);
+        setZoomButtonFocused('in');
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`window.focusZoomControl(true);`);
+        }
+      } else if (!zoomButtonFocused) {
+        // Navigate map
+        const newIndex = currentCoordIndex + 1;
+        setCurrentCoordIndex(newIndex);
+        navigateToCoordinate(newIndex);
+      }
+    },
+    onSelect: () => {
+      console.log('[MapScreen] SELECT');
+      if (menuButtonFocused) {
+        // Open drawer
+        setMenuOpen(true);
+        setMenuButtonFocused(false);
+      } else if (zoomButtonFocused) {
+        // Zoom in when zoom control is focused and OK is pressed
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`window.clickZoomIn();`);
+        }
+      }
+    },
+  });
 
   /**
    * Handle messages from WebView
@@ -110,6 +312,20 @@ export default function MapsScreen() {
    */
   const handleToggleMenu = () => {
     setMenuOpen(!menuOpen);
+    if (!menuOpen) {
+      setMenuButtonFocused(false);
+    }
+  };
+
+  /**
+   * Handle drawer focus change
+   */
+  const handleDrawerFocusChange = (hasFocus: boolean) => {
+    setDrawerHasFocus(hasFocus);
+    if (!hasFocus && !menuOpen) {
+      // Return focus to menu button when drawer closes
+      setMenuButtonFocused(true);
+    }
   };
 
   /**
@@ -166,6 +382,42 @@ export default function MapsScreen() {
             width: 100%;
             height: 100%;
             z-index: 1;
+          }
+
+          /* Style default Leaflet zoom controls with focus effects */
+          .leaflet-control-zoom {
+            border: 2px solid transparent !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+            transition: all 0.3s ease !important;
+          }
+
+          .leaflet-control-zoom.focused {
+            border: 3px solid #FFD700 !important;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.9) !important;
+            transform: scale(1.1);
+          }
+
+          .leaflet-control-zoom a {
+            width: 40px !important;
+            height: 40px !important;
+            line-height: 40px !important;
+            font-size: 24px !important;
+            font-weight: bold !important;
+            background-color: #007bff !important;
+            color: white !important;
+            transition: all 0.3s ease !important;
+          }
+
+          .leaflet-control-zoom a:hover {
+            background-color: #0056b3 !important;
+          }
+
+          .leaflet-control-zoom.focused a {
+            background-color: #0056b3 !important;
+          }
+
+          .leaflet-control-zoom-in {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
           }
 
           .map-controls {
@@ -295,8 +547,14 @@ export default function MapsScreen() {
           // MAP INITIALIZATION
           // ============================================================================
 
-          // Initialize map centered on USA
-          const map = L.map('map').setView([37.8, -96], 4);
+          // Initialize map centered on USA - ENABLE default zoom controls
+          const map = L.map('map', {
+            zoomControl: true,        // ENABLE default zoom controls (+/- buttons)
+            scrollWheelZoom: false,   // Disable mouse wheel zoom
+            doubleClickZoom: false,   // Disable double-click zoom
+            touchZoom: false,         // Disable touch/pinch zoom
+            boxZoom: false,           // Disable shift+drag box zoom
+          }).setView([37.8, -96], 4);
 
           // Add OpenStreetMap base layer
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -848,6 +1106,40 @@ export default function MapsScreen() {
             }
           };
 
+          // Add focus control for default zoom buttons
+          let zoomControlFocused = false;
+          const zoomControl = document.querySelector('.leaflet-control-zoom');
+          
+          window.focusZoomControl = function(focus) {
+            if (zoomControl) {
+              if (focus) {
+                zoomControl.classList.add('focused');
+                zoomControlFocused = true;
+                console.log('Zoom control focused');
+              } else {
+                zoomControl.classList.remove('focused');
+                zoomControlFocused = false;
+                console.log('Zoom control unfocused');
+              }
+            }
+          };
+
+          window.clickZoomIn = function() {
+            const zoomInBtn = document.querySelector('.leaflet-control-zoom-in');
+            if (zoomInBtn) {
+              zoomInBtn.click();
+              console.log('Zoom in clicked');
+            }
+          };
+
+          window.clickZoomOut = function() {
+            const zoomOutBtn = document.querySelector('.leaflet-control-zoom-out');
+            if (zoomOutBtn) {
+              zoomOutBtn.click();
+              console.log('Zoom out clicked');
+            }
+          };
+
           // Expose for direct access
           window.mapAPI = {
             loadLayer,
@@ -857,6 +1149,9 @@ export default function MapsScreen() {
             fitBounds,
             getActiveLayers: () => Array.from(activeLayers),
             getLayerRegistry: () => layersRegistry,
+            focusZoomControl: window.focusZoomControl,
+            clickZoomIn: window.clickZoomIn,
+            clickZoomOut: window.clickZoomOut,
           };
 
           console.log('Map initialized successfully');
@@ -886,23 +1181,69 @@ export default function MapsScreen() {
           scrollEnabled={true}
         />
 
-        {/* Menu Toggle Button */}
-        <TouchableOpacity
-          style={[styles.menuButton, menuOpen && styles.menuButtonActive]}
-          onPress={handleToggleMenu}
-          accessibilityLabel="Toggle map menu"
-          accessibilityRole="button"
+        {/* Menu Toggle Button - Right Side with Focus Effect */}
+        <Animated.View
+          style={{
+            transform: [{ scale: buttonScaleAnim }],
+            position: 'absolute',
+            top: 16 * scale,
+            right: 16 * scale,
+            zIndex: 999,
+          }}
         >
-          <Text style={styles.menuButtonText}>☰</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.menuButton,
+              menuOpen && styles.menuButtonActive,
+              menuButtonFocused && !menuOpen && styles.menuButtonFocused,
+            ]}
+            onPress={handleToggleMenu}
+            accessibilityLabel="Toggle map menu"
+            accessibilityRole="button"
+          >
+            <Text style={styles.menuButtonText}>☰</Text>
+          </TouchableOpacity>
+        </Animated.View>
 
-        {/* Side Menu */}
+
+        {/* Debug Info Overlay */}
+        {__DEV__ && (
+          <View style={styles.debugOverlay}>
+            <Text style={styles.debugText}>
+              Menu: {menuOpen ? 'OPEN' : 'CLOSED'}
+            </Text>
+            <Text style={styles.debugText}>
+              Button Focus: {menuButtonFocused ? 'YES' : 'NO'}
+            </Text>
+            <Text style={styles.debugText}>
+              Drawer Focus: {drawerHasFocus ? 'YES' : 'NO'}
+            </Text>
+            <Text style={styles.debugText}>
+              Map Ready: {mapReady ? 'YES' : 'NO'}
+            </Text>
+            <Text style={styles.debugText}>
+              Coord: {currentCoordIndex} - {getCoordinateByIndex(currentCoordIndex).name}
+            </Text>
+            <Text style={styles.debugText}>
+              Zoom: {currentZoom}
+            </Text>
+            <Text style={styles.debugText}>
+              Zoom Focus: {zoomButtonFocused || 'NONE'}
+            </Text>
+          </View>
+        )}
+
+        {/* Side Menu with Focus Management */}
         <MapMenu
           isOpen={menuOpen}
           onToggleLayer={handleToggleLayer}
           onClearLayers={handleClearLayers}
           activeLayers={activeLayers}
-          onClose={() => setMenuOpen(false)}
+          onClose={() => {
+            setMenuOpen(false);
+            setMenuButtonFocused(true);
+          }}
+          onFocusChange={handleDrawerFocusChange}
         />
       </View>
     </KeyboardAvoidingView>
@@ -923,16 +1264,12 @@ const useMapsScreenStyles = (scale: number) =>
     },
 
     menuButton: {
-      position: 'absolute',
-      top: 16 * scale,
-      left: 16 * scale,
       width: 48 * scale,
       height: 48 * scale,
       borderRadius: 24 * scale,
       backgroundColor: '#007bff',
       justifyContent: 'center',
       alignItems: 'center',
-      zIndex: 999,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.25,
@@ -944,9 +1281,98 @@ const useMapsScreenStyles = (scale: number) =>
       backgroundColor: '#0056b3',
     },
 
+    menuButtonFocused: {
+      shadowColor: '#FFD700',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.9,
+      shadowRadius: 12,
+      elevation: 12,
+      borderWidth: 3,
+      borderColor: '#FFD700',
+    },
+
     menuButtonText: {
       fontSize: 24 * scale,
       color: '#ffffff',
       fontWeight: 'bold',
+    },
+
+    zoomContainer: {
+      position: 'absolute',
+      left: 16 * scale,
+      top: '50%',
+      transform: [{ translateY: -60 * scale }],
+      alignItems: 'center',
+      gap: 12 * scale,
+      zIndex: 998,
+    },
+
+    zoomButton: {
+      width: 48 * scale,
+      height: 48 * scale,
+      borderRadius: 24 * scale,
+      backgroundColor: '#007bff',
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+
+    zoomButtonFocused: {
+      shadowColor: '#FFD700',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.9,
+      shadowRadius: 15,
+      elevation: 15,
+      borderWidth: 3,
+      borderColor: '#FFD700',
+      backgroundColor: '#0056b3',
+    },
+
+    zoomButtonDisabled: {
+      backgroundColor: '#6c757d',
+      opacity: 0.5,
+    },
+
+    zoomButtonText: {
+      fontSize: 28 * scale,
+      color: '#ffffff',
+      fontWeight: 'bold',
+      lineHeight: 28 * scale,
+    },
+
+    zoomLevelContainer: {
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      paddingHorizontal: 12 * scale,
+      paddingVertical: 6 * scale,
+      borderRadius: 12 * scale,
+    },
+
+    zoomLevelText: {
+      color: '#ffffff',
+      fontSize: 14 * scale,
+      fontWeight: '600',
+    },
+
+    debugOverlay: {
+      position: 'absolute',
+      top: 80 * scale,
+      right: 16 * scale,
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      padding: 12 * scale,
+      borderRadius: 8 * scale,
+      zIndex: 998,
+    },
+
+    debugText: {
+      color: '#ffffff',
+      fontSize: 12 * scale,
+      fontFamily: 'monospace',
+      marginVertical: 2 * scale,
     },
   });
