@@ -144,6 +144,25 @@ useEffect(() => {
       webViewRef.current.injectJavaScript(script);
     }
   };
+
+  const showToast = (
+    message: string,
+    type: 'info' | 'success' | 'error' = 'info',
+    duration = 2500
+  ) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+    toastTimerRef.current = setTimeout(() => {
+      setToastVisible(false);
+      toastTimerRef.current = null;
+    }, duration);
+  };
+
   // TV Remote control for map (when drawer closed) - DISABLED when drawer is open
   useTVFocus({
     enabled: !menuOpen && !drawerHasFocus && mapReady,
