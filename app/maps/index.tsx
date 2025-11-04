@@ -45,22 +45,81 @@ export default function MapsScreen() {
   }, [menuButtonFocused, menuOpen, buttonScaleAnim]);
 
   // Animate zoom in button focus
-  useEffect(() => {
-    Animated.spring(zoomInScaleAnim, {
-      toValue: zoomButtonFocused === 'in' ? 1.1 : 1,
-      friction: 5,
-      useNativeDriver: true,
-    }).start();
-  }, [zoomButtonFocused, zoomInScaleAnim]);
+ useEffect(() => {
+  Animated.spring(zoomInScaleAnim, {
+    toValue: zoomButtonFocused === 'in' ? 1.1 : 1,
+    friction: 5,
+    useNativeDriver: true,
+  }).start();
+}, [zoomButtonFocused, zoomInScaleAnim]);
 
-  // Animate zoom out button focus
+// Animate zoom out button focus
+useEffect(() => {
+  Animated.spring(zoomOutScaleAnim, {
+    toValue: zoomButtonFocused === 'out' ? 1.1 : 1,
+    friction: 5,
+    useNativeDriver: true,
+  }).start();
+}, [zoomButtonFocused, zoomOutScaleAnim]);
+
+  // ✅ CORRECTED: Control map interactions based on drawer state
   useEffect(() => {
-    Animated.spring(zoomOutScaleAnim, {
-      toValue: zoomButtonFocused === 'out' ? 1.1 : 1,
-      friction: 5,
-      useNativeDriver: true,
-    }).start();
-  }, [zoomButtonFocused, zoomOutScaleAnim]);
+    if (!mapReady || !webViewRef.current) return;
+
+    const enableMapInteractions = !menuOpen && !drawerHasFocus;
+    
+    console.log(`[MapScreen] Setting map interactions: ${enableMapInteractions ? 'ENABLED' : 'DISABLED'}`);
+
+    const script = `
+      (function() {
+        if (window.map) {
+          try {
+            // Control ALL map interaction methods
+            if (${enableMapInteractions}) {
+              // Enable all interactions when drawer is closed
+              window.map.dragging.enable();
+              window.map.touchZoom.enable();
+              window.map.doubleClickZoom.enable();
+              window.map.scrollWheelZoom.enable();
+              window.map.boxZoom.enable();
+              window.map.keyboard.enable();
+              console.log('Map interactions ENABLED');
+            } else {
+              // Disable all interactions when drawer is open
+              window.map.dragging.disable();
+              window.map.touchZoom.disable();
+              window.map.doubleClickZoom.disable();
+              window.map.scrollWheelZoom.disable();
+              window.map.boxZoom.disable();
+              window.map.keyboard.disable();
+              console.log('Map interactions DISABLED');
+            }
+          } catch (error) {
+            console.error('Error controlling map interactions:', error);
+          }
+        }
+      })();
+    `;
+    
+    webViewRef.current.injectJavaScript(script);
+  }, [menuOpen, drawerHasFocus, mapReady]);
+
+  // ✅ Clear zoom button focus and menu button focus when drawer opens
+  useEffect(() => {
+    if (menuOpen || drawerHasFocus) {
+      // Remove zoom button focus when drawer is open
+      if (zoomButtonFocused) {
+        setZoomButtonFocused(null);
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`window.focusZoomControl(false);`);
+        }
+      }
+      // Remove menu button focus when drawer is open
+      if (menuButtonFocused) {
+        setMenuButtonFocused(false);
+      }
+    }
+  }, [menuOpen, drawerHasFocus]);
 
   // Navigate map coordinates
   const navigateToCoordinate = (index: number) => {
@@ -77,7 +136,7 @@ export default function MapsScreen() {
     }
   };
 
-  // Zoom controls with visual feedback - FIXED to actually zoom the map
+  // Zoom controls with visual feedback
   const handleZoomIn = () => {
     console.log('[MapScreen] Zoom In - Current:', currentZoom);
     const newZoom = Math.min(currentZoom + 1, 18);
@@ -95,7 +154,6 @@ export default function MapsScreen() {
         (function() {
           if (window.map) {
             try {
-              // Use Leaflet's zoom methods
               window.map.setZoom(${newZoom}, {
                 animate: true,
                 duration: 0.5
@@ -130,7 +188,6 @@ export default function MapsScreen() {
         (function() {
           if (window.map) {
             try {
-              // Use Leaflet's zoom methods
               window.map.setZoom(${newZoom}, {
                 animate: true,
                 duration: 0.5
@@ -147,85 +204,100 @@ export default function MapsScreen() {
       webViewRef.current.injectJavaScript(script);
     }
   };
-
-  // TV Remote control for map (when drawer closed) - DISABLED when drawer is open
-  useTVFocus({
-    enabled: !menuOpen && !drawerHasFocus && mapReady,
-    onUp: () => {
-      console.log('[MapScreen] UP');
-      if (zoomButtonFocused) {
-        // Zoom in when zoom control is focused
-        if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`window.clickZoomIn();`);
-        }
-      } else {
-        // Navigate map
-        const newIndex = currentCoordIndex - 1;
-        setCurrentCoordIndex(newIndex);
-        navigateToCoordinate(newIndex);
+// ✅ CORRECTED: TV Remote control - Only works when drawer is closed and no focus in drawer
+useTVFocus({
+  enabled: !menuOpen && !drawerHasFocus && mapReady,
+  onUp: () => {
+    console.log('[MapScreen] UP - Navigation/Zoom');
+    if (zoomButtonFocused === 'in') {
+      // Zoom in when + button is focused
+      handleZoomIn();
+    } else if (zoomButtonFocused === 'out') {
+      // Move focus from - button to + button
+      setZoomButtonFocused('in');
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(`window.focusZoomControl('in');`);
       }
-    },
-    onDown: () => {
-      console.log('[MapScreen] DOWN');
-      if (zoomButtonFocused) {
-        // Zoom out when zoom control is focused
-        if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`window.clickZoomOut();`);
-        }
-      } else {
-        // Navigate map
-        const newIndex = currentCoordIndex + 1;
-        setCurrentCoordIndex(newIndex);
-        navigateToCoordinate(newIndex);
+    } else {
+      // Map navigation when no zoom button is focused
+      const newIndex = currentCoordIndex - 1;
+      setCurrentCoordIndex(newIndex);
+      navigateToCoordinate(newIndex);
+    }
+  },
+  onDown: () => {
+    console.log('[MapScreen] DOWN - Navigation/Zoom');
+    if (zoomButtonFocused === 'out') {
+      // Zoom out when - button is focused
+      handleZoomOut();
+    } else if (zoomButtonFocused === 'in') {
+      // Move focus from + button to - button
+      setZoomButtonFocused('out');
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(`window.focusZoomControl('out');`);
       }
-    },
-    onLeft: () => {
-      console.log('[MapScreen] LEFT');
-      if (zoomButtonFocused) {
-        // Move focus from zoom control to menu button
-        setZoomButtonFocused(null);
-        setMenuButtonFocused(true);
-        if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`window.focusZoomControl(false);`);
-        }
-      } else {
-        // Navigate map
-        const newIndex = currentCoordIndex - 1;
-        setCurrentCoordIndex(newIndex);
-        navigateToCoordinate(newIndex);
+    } else {
+      // Map navigation when no zoom button is focused
+      const newIndex = currentCoordIndex + 1;
+      setCurrentCoordIndex(newIndex);
+      navigateToCoordinate(newIndex);
+    }
+  },
+  onLeft: () => {
+    console.log('[MapScreen] LEFT - Focus Navigation');
+    if (zoomButtonFocused) {
+      // Move focus from zoom control to menu button
+      setZoomButtonFocused(null);
+      setMenuButtonFocused(true);
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(`window.focusZoomControl(false);`);
       }
-    },
-    onRight: () => {
-      console.log('[MapScreen] RIGHT');
-      if (menuButtonFocused) {
-        // Move focus from menu button to zoom control
-        setMenuButtonFocused(false);
-        setZoomButtonFocused('in');
-        if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`window.focusZoomControl(true);`);
-        }
-      } else if (!zoomButtonFocused) {
-        // Navigate map
-        const newIndex = currentCoordIndex + 1;
-        setCurrentCoordIndex(newIndex);
-        navigateToCoordinate(newIndex);
+    } else if (menuButtonFocused) {
+      // Allow map navigation when menu button is focused
+      const newIndex = currentCoordIndex - 1;
+      setCurrentCoordIndex(newIndex);
+      navigateToCoordinate(newIndex);
+    }
+  },
+  onRight: () => {
+    console.log('[MapScreen] RIGHT - Focus Navigation');
+    // Don't allow zoom focus if drawer is open
+    if (menuOpen || drawerHasFocus) return;
+    
+    if (menuButtonFocused) {
+      // Move focus from menu button to zoom control (+ button)
+      setMenuButtonFocused(false);
+      setZoomButtonFocused('in');
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(`window.focusZoomControl('in');`);
       }
-    },
-    onSelect: () => {
-      console.log('[MapScreen] SELECT');
-      if (menuButtonFocused) {
-        // Open drawer
-        setMenuOpen(true);
-        setMenuButtonFocused(false);
-      } else if (zoomButtonFocused) {
-        // Zoom in when zoom control is focused and OK is pressed
-        if (webViewRef.current) {
-          webViewRef.current.injectJavaScript(`window.clickZoomIn();`);
-        }
+    } else if (zoomButtonFocused === 'in') {
+      // Move focus from + button to - button
+      setZoomButtonFocused('out');
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(`window.focusZoomControl('out');`);
       }
-    },
-  });
-
+    } else if (zoomButtonFocused === 'out') {
+      // Stay on - button (or you could cycle back to + button)
+      // setZoomButtonFocused('in');
+    } else {
+      // Allow map navigation when no specific button is focused
+      const newIndex = currentCoordIndex + 1;
+      setCurrentCoordIndex(newIndex);
+      navigateToCoordinate(newIndex);
+    }
+  },
+  onSelect: () => {
+    console.log('[MapScreen] SELECT - Action');
+    if (menuButtonFocused) {
+      handleToggleMenu();
+    } else if (zoomButtonFocused === 'in') {
+      handleZoomIn();
+    } else if (zoomButtonFocused === 'out') {
+      handleZoomOut();
+    }
+  },
+});
   /**
    * Handle messages from WebView
    */
@@ -308,26 +380,42 @@ export default function MapsScreen() {
   };
 
   /**
-   * Toggle menu
+   * ✅ CORRECTED: Toggle menu with proper focus and interaction control
    */
   const handleToggleMenu = () => {
-    setMenuOpen(!menuOpen);
-    if (!menuOpen) {
+    const willOpen = !menuOpen;
+    console.log(`[MapScreen] Toggling menu: ${willOpen ? 'OPEN' : 'CLOSE'}`);
+    
+    setMenuOpen(willOpen);
+
+    if (willOpen) {
+      // When drawer opens → remove focus from menu button
       setMenuButtonFocused(false);
+      // Map interactions will be disabled by the useEffect above
+    } else {
+      // When drawer closes → restore focus to menu button
+      setMenuButtonFocused(true);
+      // Map interactions will be enabled by the useEffect above
     }
   };
 
   /**
-   * Handle drawer focus change
+   * ✅ CORRECTED: Handle drawer focus change
    */
   const handleDrawerFocusChange = (hasFocus: boolean) => {
+    console.log(`[MapScreen] Drawer focus: ${hasFocus ? 'GAINED' : 'LOST'}`);
     setDrawerHasFocus(hasFocus);
+
+    // Map interactions are controlled by the useEffect that watches menuOpen and drawerHasFocus
+    // No need to manually control interactions here
+
+    // If drawer loses focus and menu is closed, return focus to menu button
     if (!hasFocus && !menuOpen) {
-      // Return focus to menu button when drawer closes
       setMenuButtonFocused(true);
     }
   };
 
+  // Rest of your HTML content and component rendering remains the same...
   /**
    * Get HTML content for WebView
    */
@@ -385,6 +473,23 @@ export default function MapsScreen() {
           }
 
           /* Style default Leaflet zoom controls with focus effects */
+
+          /* Update your existing zoom control styles */
+.leaflet-control-zoom.focused-in a.leaflet-control-zoom-in {
+  background-color: #0056b3 !important;
+  border: 3px solid #FFD700 !important;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.9) !important;
+}
+
+.leaflet-control-zoom.focused-out a.leaflet-control-zoom-out {
+  background-color: #0056b3 !important;
+  border: 3px solid #FFD700 !important;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.9) !important;
+}
+
+.leaflet-control-zoom a.focused {
+  transform: scale(1.1);
+}
           .leaflet-control-zoom {
             border: 2px solid transparent !important;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
@@ -554,6 +659,7 @@ export default function MapsScreen() {
             doubleClickZoom: false,   // Disable double-click zoom
             touchZoom: false,         // Disable touch/pinch zoom
             boxZoom: false,           // Disable shift+drag box zoom
+            keyboard: false,          // Disable keyboard controls initially
           }).setView([37.8, -96], 4);
 
           // Add OpenStreetMap base layer
@@ -1110,19 +1216,34 @@ export default function MapsScreen() {
           let zoomControlFocused = false;
           const zoomControl = document.querySelector('.leaflet-control-zoom');
           
-          window.focusZoomControl = function(focus) {
-            if (zoomControl) {
-              if (focus) {
-                zoomControl.classList.add('focused');
-                zoomControlFocused = true;
-                console.log('Zoom control focused');
-              } else {
-                zoomControl.classList.remove('focused');
-                zoomControlFocused = false;
-                console.log('Zoom control unfocused');
-              }
-            }
-          };
+          // Replace the existing focusZoomControl function in your HTML
+window.focusZoomControl = function(focusType) {
+  const zoomControl = document.querySelector('.leaflet-control-zoom');
+  const zoomInBtn = document.querySelector('.leaflet-control-zoom-in');
+  const zoomOutBtn = document.querySelector('.leaflet-control-zoom-out');
+  
+  if (zoomControl && zoomInBtn && zoomOutBtn) {
+    // Remove all focus classes first
+    zoomControl.classList.remove('focused', 'focused-in', 'focused-out');
+    zoomInBtn.classList.remove('focused');
+    zoomOutBtn.classList.remove('focused');
+    
+    if (focusType === 'in') {
+      // Focus on zoom in button
+      zoomControl.classList.add('focused', 'focused-in');
+      zoomInBtn.classList.add('focused');
+      console.log('Zoom IN button focused');
+    } else if (focusType === 'out') {
+      // Focus on zoom out button
+      zoomControl.classList.add('focused', 'focused-out');
+      zoomOutBtn.classList.add('focused');
+      console.log('Zoom OUT button focused');
+    } else {
+      // Remove all focus
+      console.log('Zoom control unfocused');
+    }
+  }
+};
 
           window.clickZoomIn = function() {
             const zoomInBtn = document.querySelector('.leaflet-control-zoom-in');
