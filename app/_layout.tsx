@@ -50,6 +50,22 @@ export default function RootLayout() {
             headerBackTitle: 'Back',
           }}
         />
+         <Stack.Screen
+          name="rnmaps/index"
+          options={{
+            title: 'RN maps',
+            headerShown: true,
+            headerBackTitle: 'Back',
+          }}
+        />
+        <Stack.Screen
+          name="analytics/index"
+          options={{
+            title: 'Analytics',
+            headerShown: true,
+            headerBackTitle: 'Back',
+          }}
+        />
         <Stack.Screen name="+not-found" />
       </Stack>
     </ThemeProvider>
