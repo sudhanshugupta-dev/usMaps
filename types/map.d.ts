@@ -36,10 +36,13 @@ export interface MapMenuState {
 }
 
 export interface MapMessage {
-  type: 'toggleLayer' | 'setOpacity' | 'clearLayers' | 'fitBounds';
+  type: 'toggleLayer' | 'setOpacity' | 'clearLayers' | 'fitBounds' | 'showRoute' | 'clearRoute';
   layerId?: string;
   opacity?: number;
   bounds?: [[number, number], [number, number]];
+  routeId?: string;
+  coordinates?: [number, number][];
+  routeName?: string;
 }
 
 export interface MapResponse {
