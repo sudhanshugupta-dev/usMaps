@@ -11,27 +11,36 @@ import {
 import { WebView } from 'react-native-webview';
 import { useScale } from '@/hooks/useScale';
 import { MapMenu } from '@/components/MapMenu';
-import { ALL_LAYERS } from '@/app/maps/layersConfig';
+import { DirectionsPanel } from '@/components/DirectionsPanel';
 import { EsriLayer, MapMessage } from '@/types/map';
 import { useTVFocus } from '@/hooks/useTVFocus';
-import { MAP_COORDINATES, getCoordinateByIndex } from '@/constants/mapCoordinates';
-
-const MAP_HTML_URI = require('./MapView.html');
+import { getCoordinateByIndex } from '@/constants/mapCoordinates';
+import { Route } from '@/constants/directionsData';
+import { Toast } from '@/components/Toast';
 
 export default function MapsScreen() {
   const scale = useScale();
   const webViewRef = useRef<WebView>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [directionsOpen, setDirectionsOpen] = useState(false);
   const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set());
   const [mapReady, setMapReady] = useState(false);
   const [menuButtonFocused, setMenuButtonFocused] = useState(true);
+  const [directionsButtonFocused, setDirectionsButtonFocused] = useState(false);
   const [drawerHasFocus, setDrawerHasFocus] = useState(false);
+  const [directionsHasFocus, setDirectionsHasFocus] = useState(false);
   const [currentCoordIndex, setCurrentCoordIndex] = useState(0);
   const [currentZoom, setCurrentZoom] = useState(4);
   const [zoomButtonFocused, setZoomButtonFocused] = useState<'in' | 'out' | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
+  const directionsButtonScaleAnim = useRef(new Animated.Value(1)).current;
   const zoomInScaleAnim = useRef(new Animated.Value(1)).current;
   const zoomOutScaleAnim = useRef(new Animated.Value(1)).current;
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'info' | 'success' | 'error'>('info');
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const styles = useMapsScreenStyles(scale);
 
@@ -62,6 +71,15 @@ export default function MapsScreen() {
     }).start();
   }, [zoomButtonFocused, zoomOutScaleAnim]);
 
+  // Animate directions button focus
+  useEffect(() => {
+    Animated.spring(directionsButtonScaleAnim, {
+      toValue: directionsButtonFocused && !directionsOpen ? 1.1 : 1,
+      friction: 5,
+      useNativeDriver: true,
+    }).start();
+  }, [directionsButtonFocused, directionsOpen, directionsButtonScaleAnim]);
+
   // Navigate map coordinates
   const navigateToCoordinate = (index: number) => {
     const coord = getCoordinateByIndex(index);
@@ -77,80 +95,23 @@ export default function MapsScreen() {
     }
   };
 
-  // Zoom controls with visual feedback - FIXED to actually zoom the map
-  const handleZoomIn = () => {
-    console.log('[MapScreen] Zoom In - Current:', currentZoom);
-    const newZoom = Math.min(currentZoom + 1, 18);
-    
-    if (newZoom === currentZoom) {
-      console.log('[MapScreen] Already at max zoom (18)');
-      return;
+  const showToast = (message: string, type: 'info' | 'success' | 'error' = 'info', duration = 2500) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
     }
-    
-    setCurrentZoom(newZoom);
-    console.log('[MapScreen] New zoom:', newZoom);
-    
-    if (mapReady && webViewRef.current) {
-      const script = `
-        (function() {
-          if (window.map) {
-            try {
-              // Use Leaflet's zoom methods
-              window.map.setZoom(${newZoom}, {
-                animate: true,
-                duration: 0.5
-              });
-              console.log('Map zoomed IN to:', ${newZoom});
-            } catch (error) {
-              console.error('Zoom error:', error);
-            }
-          } else {
-            console.error('Map not available');
-          }
-        })();
-      `;
-      webViewRef.current.injectJavaScript(script);
-    }
-  };
-
-  const handleZoomOut = () => {
-    console.log('[MapScreen] Zoom Out - Current:', currentZoom);
-    const newZoom = Math.max(currentZoom - 1, 2);
-    
-    if (newZoom === currentZoom) {
-      console.log('[MapScreen] Already at min zoom (2)');
-      return;
-    }
-    
-    setCurrentZoom(newZoom);
-    console.log('[MapScreen] New zoom:', newZoom);
-    
-    if (mapReady && webViewRef.current) {
-      const script = `
-        (function() {
-          if (window.map) {
-            try {
-              // Use Leaflet's zoom methods
-              window.map.setZoom(${newZoom}, {
-                animate: true,
-                duration: 0.5
-              });
-              console.log('Map zoomed OUT to:', ${newZoom});
-            } catch (error) {
-              console.error('Zoom error:', error);
-            }
-          } else {
-            console.error('Map not available');
-          }
-        })();
-      `;
-      webViewRef.current.injectJavaScript(script);
-    }
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+    toastTimerRef.current = setTimeout(() => {
+      setToastVisible(false);
+      toastTimerRef.current = null;
+    }, duration);
   };
 
   // TV Remote control for map (when drawer closed) - DISABLED when drawer is open
   useTVFocus({
-    enabled: !menuOpen && !drawerHasFocus && mapReady,
+    enabled: !menuOpen && !drawerHasFocus && !directionsOpen && !directionsHasFocus && mapReady,
     onUp: () => {
       console.log('[MapScreen] UP');
       if (zoomButtonFocused) {
@@ -182,12 +143,16 @@ export default function MapsScreen() {
     onLeft: () => {
       console.log('[MapScreen] LEFT');
       if (zoomButtonFocused) {
-        // Move focus from zoom control to menu button
+        // Move focus from zoom control to directions button
         setZoomButtonFocused(null);
-        setMenuButtonFocused(true);
+        setDirectionsButtonFocused(true);
         if (webViewRef.current) {
           webViewRef.current.injectJavaScript(`window.focusZoomControl(false);`);
         }
+      } else if (directionsButtonFocused) {
+        // Move focus from directions button to menu button
+        setDirectionsButtonFocused(false);
+        setMenuButtonFocused(true);
       } else {
         // Navigate map
         const newIndex = currentCoordIndex - 1;
@@ -198,8 +163,12 @@ export default function MapsScreen() {
     onRight: () => {
       console.log('[MapScreen] RIGHT');
       if (menuButtonFocused) {
-        // Move focus from menu button to zoom control
+        // Move focus from menu button to directions button
         setMenuButtonFocused(false);
+        setDirectionsButtonFocused(true);
+      } else if (directionsButtonFocused) {
+        // Move focus from directions button to zoom control
+        setDirectionsButtonFocused(false);
         setZoomButtonFocused('in');
         if (webViewRef.current) {
           webViewRef.current.injectJavaScript(`window.focusZoomControl(true);`);
@@ -217,6 +186,10 @@ export default function MapsScreen() {
         // Open drawer
         setMenuOpen(true);
         setMenuButtonFocused(false);
+      } else if (directionsButtonFocused) {
+        // Open directions panel
+        setDirectionsOpen(true);
+        setDirectionsButtonFocused(false);
       } else if (zoomButtonFocused) {
         // Zoom in when zoom control is focused and OK is pressed
         if (webViewRef.current) {
@@ -240,6 +213,10 @@ export default function MapsScreen() {
           console.log('[MapScreen] Map is ready');
           break;
 
+        case 'layerLoading':
+          showToast('Please wait a moment, data is loading...', 'info', 4000);
+          break;
+
         case 'layerToggled':
           if (message.visible) {
             setActiveLayers((prev) => new Set([...prev, message.layerId]));
@@ -257,10 +234,16 @@ export default function MapsScreen() {
             `[MapScreen] Layer ${message.layerId} loaded:`,
             message.success
           );
+          if (message.success) {
+            showToast('Data loaded successfully', 'success');
+          } else {
+            showToast('Failed to load data, please try again', 'error');
+          }
           break;
 
         case 'error':
           console.error('[MapScreen] Map error:', message.message);
+          showToast('Failed to load data, please try again', 'error');
           break;
 
         default:
@@ -276,8 +259,12 @@ export default function MapsScreen() {
    */
   const sendToWebView = (message: MapMessage) => {
     if (webViewRef.current && mapReady) {
-      const script = `window.handleMapMessage('${JSON.stringify(message).replace(/'/g, "\\'")}');`;
+      const messageStr = JSON.stringify(message);
+      console.log('[MapScreen] Sending to WebView:', messageStr);
+      const script = `window.handleMapMessage('${messageStr.replace(/'/g, "\\'")}');`;
       webViewRef.current.injectJavaScript(script);
+    } else {
+      console.warn('[MapScreen] WebView not ready or ref missing. MapReady:', mapReady);
     }
   };
 
@@ -326,6 +313,44 @@ export default function MapsScreen() {
       // Return focus to menu button when drawer closes
       setMenuButtonFocused(true);
     }
+  };
+
+  /**
+   * Handle directions focus change
+   */
+  const handleDirectionsFocusChange = (hasFocus: boolean) => {
+    setDirectionsHasFocus(hasFocus);
+    if (!hasFocus && !directionsOpen) {
+      // Return focus to directions button when panel closes
+      setDirectionsButtonFocused(true);
+    }
+  };
+
+  /**
+   * Handle route selection
+   */
+  const handleRouteSelect = (route: Route) => {
+    console.log('[MapScreen] Route selected:', route.name, route.id);
+    setSelectedRoute(route);
+    
+    // Send route to WebView to display on map
+    const message: MapMessage = {
+      type: 'showRoute',
+      routeId: route.id,
+      routeName: route.name,
+      coordinates: route.coordinates,
+    };
+    
+    console.log('[MapScreen] Sending route message:', message);
+    sendToWebView(message);
+  };
+
+  /**
+   * Handle clear route
+   */
+  const handleClearRoute = () => {
+    setSelectedRoute(null);
+    sendToWebView({ type: 'clearRoute' });
   };
 
   /**
@@ -570,6 +595,7 @@ export default function MapsScreen() {
           const layersRegistry = {};
           const layerStates = {};
           let activeLayers = new Set();
+          const pendingToggles = {};
 
           // ============================================================================
           // UTILITY FUNCTIONS
@@ -878,128 +904,134 @@ export default function MapsScreen() {
           // LAYER MANAGEMENT
           // ============================================================================
 
-          /**
-           * Load and add a layer to the map
-           */
-          async function loadLayer(layerId, url, layerType = 'geojson') {
-            console.log(\`[loadLayer] Starting to load layer: \${layerId}, type: \${layerType}, url: \${url}\`);
-            
-            if (layersRegistry[layerId]) {
-              console.log(\`[loadLayer] Layer \${layerId} already loaded\`);
-              return;
-            }
+/**
+ * Load and add a layer to the map
+ */
+async function loadLayer(layerId, url, layerType = 'geojson') {
+  console.log('[loadLayer] Starting to load layer: ' + layerId + ', type: ' + layerType + ', url: ' + url);
+  
+if (layersRegistry[layerId]) {
+  console.log('[loadLayer] Layer ' + layerId + ' already loaded');
+  return;
+}
 
-            setLoading(true);
+setLoading(true);
+sendMessage('layerLoading', { layerId });
 
-            try {
-              let layer = null;
+try {
+  let layer = null;
 
-              if (layerType === 'geojson' || layerType === 'feature') {
-                console.log(\`[loadLayer] Fetching GeoJSON for \${layerId}\`);
-                const data = await fetchGeoJSON(url);
-                
-                if (!data) {
-                  throw new Error('Failed to fetch GeoJSON - no data returned');
-                }
-                
-                if (!data.features) {
-                  console.warn(\`[loadLayer] GeoJSON has no features for \${layerId}\`, data);
-                }
+  if (layerType === 'geojson' || layerType === 'feature') {
+    console.log('[loadLayer] Fetching GeoJSON for ' + layerId);
+    const data = await fetchGeoJSON(url);
+    
+    if (!data) {
+      throw new Error('Failed to fetch GeoJSON - no data returned');
+    }
+    
+    if (!data.features) {
+      console.warn('[loadLayer] GeoJSON has no features for ' + layerId, data);
+    }
 
-                console.log(\`[loadLayer] GeoJSON fetched successfully, features: \${data.features ? data.features.length : 0}\`);
+    console.log('[loadLayer] GeoJSON fetched successfully, features: ' + (data.features ? data.features.length : 0));
 
-                // Determine layer type based on layer ID
-                if (layerId.includes('heatmap')) {
-                  console.log(\`[loadLayer] Creating heatmap layer for \${layerId}\`);
-                  layer = createHeatmapLayer(data);
-                  console.log(\`[loadLayer] Heatmap layer created:\`, layer ? 'SUCCESS' : 'FAILED');
-                  if (!layer) {
-                    throw new Error('Heatmap layer creation returned null');
-                  }
-                } else if (layerId.includes('cluster')) {
-                  console.log(\`[loadLayer] Creating cluster layer for \${layerId}\`);
-                  layer = createClusterLayer(data);
-                  console.log(\`[loadLayer] Cluster layer created:\`, layer ? 'SUCCESS' : 'FAILED');
-                  if (!layer) {
-                    throw new Error('Cluster layer creation returned null');
-                  }
-                } else {
-                  console.log(\`[loadLayer] Creating GeoJSON layer for \${layerId}\`);
-                  const color = getLayerColor(layerId);
-                  layer = createGeoJSONLayer(data, layerId, color);
-                  console.log(\`[loadLayer] GeoJSON layer created:\`, layer ? 'SUCCESS' : 'FAILED');
-                  if (!layer) {
-                    throw new Error('GeoJSON layer creation returned null');
-                  }
-                }
-              } else if (layerType === 'tile') {
-                console.log(\`[loadLayer] Creating tile layer for \${layerId}\`);
-                // For tile layers, use Esri tile URL
-                layer = L.tileLayer(url, {
-                  maxZoom: 19,
-                  attribution: 'Esri',
-                });
-              }
+    // Determine layer type based on layer ID
+    if (layerId.includes('heatmap')) {
+      console.log('[loadLayer] Creating heatmap layer for ' + layerId);
+      layer = createHeatmapLayer(data);
+      console.log('[loadLayer] Heatmap layer created:', layer ? 'SUCCESS' : 'FAILED');
+      if (!layer) {
+        throw new Error('Heatmap layer creation returned null');
+      }
+    } else if (layerId.includes('cluster')) {
+      console.log('[loadLayer] Creating cluster layer for ' + layerId);
+      layer = createClusterLayer(data);
+      console.log('[loadLayer] Cluster layer created:', layer ? 'SUCCESS' : 'FAILED');
+      if (!layer) {
+        throw new Error('Cluster layer creation returned null');
+      }
+    } else {
+      console.log('[loadLayer] Creating GeoJSON layer for ' + layerId);
+      const color = getLayerColor(layerId);
+      layer = createGeoJSONLayer(data, layerId, color);
+      console.log('[loadLayer] GeoJSON layer created:', layer ? 'SUCCESS' : 'FAILED');
+      if (!layer) {
+        throw new Error('GeoJSON layer creation returned null');
+      }
+    }
+  } else if (layerType === 'tile') {
+    console.log('[loadLayer] Creating tile layer for ' + layerId);
+    // For tile layers, use Esri tile URL
+    layer = L.tileLayer(url, {
+      maxZoom: 19,
+      attribution: 'Esri',
+    });
+  }
 
-              if (layer) {
-                layersRegistry[layerId] = layer;
-                layerStates[layerId] = { loaded: true, visible: false };
-                console.log(\`[loadLayer] ✅ Layer \${layerId} loaded successfully and stored in registry\`);
-                console.log(\`[loadLayer] Registry keys: \${Object.keys(layersRegistry).join(', ')}\`);
-                sendMessage('layerLoaded', { layerId, success: true });
-                return true;
-              } else {
-                throw new Error('Failed to create layer object');
-              }
-            } catch (error) {
-              console.error(\`[loadLayer] ❌ Error loading layer \${layerId}:\`, error);
-              console.error(\`[loadLayer] Error details:\`, error.message, error.stack);
-              sendMessage('layerLoaded', {
-                layerId,
-                success: false,
-                message: error.message,
-              });
-              return false;
-            } finally {
-              setLoading(false);
-            }
-          }
+  if (layer) {
+    layersRegistry[layerId] = layer;
+    layerStates[layerId] = { loaded: true, visible: false };
+    console.log('[loadLayer] Layer ' + layerId + ' loaded successfully and stored in registry');
+    console.log('[loadLayer] Registry keys: ' + Object.keys(layersRegistry).join(', '));
+    sendMessage('layerLoaded', { layerId, success: true });
+    if (pendingToggles[layerId]) {
+      console.log('[loadLayer] Executing pending toggle for', layerId);
+      toggleLayer(layerId);
+      delete pendingToggles[layerId];
+    }
+    return true;
+  } else {
+    throw new Error('Failed to create layer object');
+  }
+} catch (error) {
+  console.error('[loadLayer] Error loading layer ' + layerId + ':', error);
+  console.error('[loadLayer] Error details:', error.message, error.stack);
+  sendMessage('layerLoaded', {
+    layerId,
+    success: false,
+    message: error.message,
+  });
+  return false;
+} finally {
+  setLoading(false);
+}
+}
 
           /**
            * Toggle layer visibility
            */
           function toggleLayer(layerId) {
-            console.log(\`[toggleLayer] Toggling layer: \${layerId}\`);
+            console.log('[toggleLayer] Toggling layer: ' + layerId);
             
             const layer = layersRegistry[layerId];
             if (!layer) {
-              console.error(\`[toggleLayer] Layer \${layerId} not found in registry\`);
+              console.error('[toggleLayer] Layer ' + layerId + ' not found in registry');
               console.log('[toggleLayer] Available layers:', Object.keys(layersRegistry));
               return false;
             }
 
             const state = layerStates[layerId];
             if (!state) {
-              console.error(\`[toggleLayer] State not found for layer \${layerId}\`);
+              console.error('[toggleLayer] State not found for layer ' + layerId);
               return false;
             }
 
             if (state.visible) {
               // Hide layer
-              console.log(\`[toggleLayer] Hiding layer \${layerId}\`);
+              console.log('[toggleLayer] Hiding layer ' + layerId);
               map.removeLayer(layer);
               state.visible = false;
               activeLayers.delete(layerId);
             } else {
               // Show layer
-              console.log(\`[toggleLayer] Showing layer \${layerId}\`);
+              console.log('[toggleLayer] Showing layer ' + layerId);
               layer.addTo(map);
               state.visible = true;
               activeLayers.add(layerId);
             }
 
-            console.log(\`[toggleLayer] ✅ Layer \${layerId} is now \${state.visible ? 'visible' : 'hidden'}\`);
-            console.log(\`[toggleLayer] Active layers: \${Array.from(activeLayers).join(', ')}\`);
+            console.log('[toggleLayer] ✅ Layer ' + layerId + ' is now ' + (state.visible ? 'visible' : 'hidden'));
+            console.log('[toggleLayer] Active layers: ' + Array.from(activeLayers).join(', '));
             updateInfoPanel();
             sendMessage('layerToggled', { layerId, visible: state.visible, success: true });
             return state.visible;
@@ -1052,6 +1084,114 @@ export default function MapsScreen() {
           }
 
           // ============================================================================
+          // ============================================================================
+          // DIRECTIONS / ROUTES HANDLING
+          // ============================================================================
+          
+          let currentRoute = null;
+          let routePolyline = null;
+          let routeMarkers = [];
+
+          function clearRoute() {
+            if (routePolyline) {
+              map.removeLayer(routePolyline);
+              routePolyline = null;
+            }
+            
+            routeMarkers.forEach((marker) => {
+              map.removeLayer(marker);
+            });
+            routeMarkers = [];
+            
+            currentRoute = null;
+            console.log('[clearRoute] Route cleared');
+          }
+
+          function showRoute(routeData) {
+            // Clear existing route
+            clearRoute();
+            
+            if (!routeData.coordinates || routeData.coordinates.length === 0) {
+              console.warn('[showRoute] No coordinates provided for route');
+              return;
+            }
+
+            currentRoute = routeData;
+            console.log('[showRoute] Displaying route:', routeData.name);
+
+            // Create polyline for the route with blue color (Google Maps style)
+            routePolyline = L.polyline(routeData.coordinates, {
+              color: '#0066ff',
+              weight: 5,
+              opacity: 0.85,
+              lineCap: 'round',
+              lineJoin: 'round',
+              dashArray: '0',
+              className: 'route-polyline',
+            }).addTo(map);
+
+            // Add start marker (green)
+            if (routeData.coordinates.length > 0) {
+              const startCoord = routeData.coordinates[0];
+              const startMarker = L.circleMarker([startCoord[0], startCoord[1]], {
+                radius: 10,
+                fillColor: '#00cc00',
+                color: '#fff',
+                weight: 3,
+                opacity: 1,
+                fillOpacity: 0.95,
+                className: 'route-start-marker',
+              })
+                .bindPopup('<strong>Start</strong>', { closeButton: false })
+                .addTo(map);
+              routeMarkers.push(startMarker);
+            }
+
+            // Add intermediate waypoint markers (blue)
+            if (routeData.coordinates.length > 2) {
+              for (let i = 1; i < routeData.coordinates.length - 1; i++) {
+                const coord = routeData.coordinates[i];
+                const waypointMarker = L.circleMarker([coord[0], coord[1]], {
+                  radius: 7,
+                  fillColor: '#0066ff',
+                  color: '#fff',
+                  weight: 2,
+                  opacity: 1,
+                  fillOpacity: 0.85,
+                  className: 'route-waypoint-marker',
+                })
+                  .bindPopup('<strong>Waypoint ' + i + '</strong>', { closeButton: false })
+                  .addTo(map);
+                routeMarkers.push(waypointMarker);
+              }
+            }
+
+            // Add end marker (red)
+            if (routeData.coordinates.length > 0) {
+              const endCoord = routeData.coordinates[routeData.coordinates.length - 1];
+              const endMarker = L.circleMarker([endCoord[0], endCoord[1]], {
+                radius: 10,
+                fillColor: '#ff3333',
+                color: '#fff',
+                weight: 3,
+                opacity: 1,
+                fillOpacity: 0.95,
+                className: 'route-end-marker',
+              })
+                .bindPopup('<strong>End</strong>', { closeButton: false })
+                .addTo(map);
+              routeMarkers.push(endMarker);
+            }
+
+            // Fit map bounds to route with padding
+            const bounds = L.latLngBounds(routeData.coordinates);
+            map.fitBounds(bounds, { padding: [80, 80], maxZoom: 9 });
+
+            console.log('[showRoute] ✅ Route displayed:', routeData.name);
+            console.log('[showRoute] 📍 Markers added:', routeMarkers.length, '| Coordinates:', routeData.coordinates.length);
+            sendMessage('routeDisplayed', { routeId: routeData.id, success: true });
+          }
+
           // MESSAGE HANDLING FROM REACT NATIVE
           // ============================================================================
 
@@ -1071,12 +1211,9 @@ export default function MapsScreen() {
                   console.log('[handleMapMessage] Layer state:', layerStates[data.layerId]);
                   
                   if (!layerStates[data.layerId]?.loaded) {
-                    console.log('[handleMapMessage] Layer not loaded, loading first...');
+                    console.log('[handleMapMessage] Layer not loaded, loading first and queueing toggle...');
+                    pendingToggles[data.layerId] = true;
                     loadLayer(data.layerId, data.url, data.layerType || 'geojson');
-                    setTimeout(() => {
-                      console.log('[handleMapMessage] Now toggling layer after load');
-                      toggleLayer(data.layerId);
-                    }, 500);
                   } else {
                     console.log('[handleMapMessage] Layer already loaded, toggling immediately');
                     toggleLayer(data.layerId);
@@ -1096,6 +1233,16 @@ export default function MapsScreen() {
                 case 'fitBounds':
                   console.log('[handleMapMessage] Fitting bounds:', data.bounds);
                   fitBounds(data.bounds);
+                  break;
+
+                case 'showRoute':
+                  console.log('[handleMapMessage] Showing route:', data.routeName);
+                  showRoute(data);
+                  break;
+
+                case 'clearRoute':
+                  console.log('[handleMapMessage] Clearing route');
+                  clearRoute();
                   break;
 
                 default:
@@ -1205,6 +1352,29 @@ export default function MapsScreen() {
           </TouchableOpacity>
         </Animated.View>
 
+        {/* Directions Toggle Button - Right Side Below Menu */}
+        <Animated.View
+          style={{
+            transform: [{ scale: directionsButtonScaleAnim }],
+            position: 'absolute',
+            top: 16 + scale,
+            right: 86 * scale,
+            zIndex: 999,
+          }}
+        >
+          <TouchableOpacity
+            style={[
+              styles.menuButton,
+              directionsOpen && styles.menuButtonActive,
+              directionsButtonFocused && !directionsOpen && styles.menuButtonFocused,
+            ]}
+            onPress={() => setDirectionsOpen(!directionsOpen)}
+            accessibilityLabel="Toggle directions panel"
+            accessibilityRole="button"
+          >
+            <Text style={styles.menuButtonText}>🛣️</Text>
+          </TouchableOpacity>
+        </Animated.View>
 
         {/* Debug Info Overlay */}
         {__DEV__ && (
@@ -1245,6 +1415,21 @@ export default function MapsScreen() {
           }}
           onFocusChange={handleDrawerFocusChange}
         />
+
+        {/* Directions Panel with Focus Management */}
+        <DirectionsPanel
+          isOpen={directionsOpen}
+          onClose={() => {
+            setDirectionsOpen(false);
+            setDirectionsButtonFocused(true);
+          }}
+          onRouteSelect={handleRouteSelect}
+          onFocusChange={handleDirectionsFocusChange}
+          selectedRoute={selectedRoute}
+        />
+
+        {/* Toast notifications */}
+        <Toast visible={toastVisible} message={toastMessage} type={toastType} />
       </View>
     </KeyboardAvoidingView>
   );
