@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esri Feature Layers Demo - US Maps</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      height: 100vh;
+    }
+
+    .container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    .sidebar {
+      width: 320px;
+      background: white;
+      border-right: 1px solid #e5e7eb;
+      overflow-y: auto;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .sidebar h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #1a1a1a;
+    }
+
+    .sidebar h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 20px;
+      margin-bottom: 12px;
+      color: #374151;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .layer-group {
+      margin-bottom: 24px;
+    }
+
+    .layer-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 8px;
+    }
+
+    .layer-item:hover {
+      background: #f3f4f6;
+    }
+
+    .layer-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #007bff;
+    }
+
+    .layer-item label {
+      flex: 1;
+      cursor: pointer;
+      font-size: 13px;
+      color: #333;
+    }
+
+    .layer-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      flex-shrink: 0;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    button {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: #007bff;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #0056b3;
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #d1d5db;
+    }
+
+    .info-panel {
+      background: #f0f9ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: #1e40af;
+    }
+
+    .info-panel strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #1e3a8a;
+    }
+
+    .map-container {
+      flex: 1;
+      position: relative;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .status {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      font-size: 12px;
+      color: #666;
+      z-index: 500;
+    }
+
+    .status.loading {
+      color: #1e40af;
+    }
+
+    .status.success {
+      color: #10b981;
+    }
+
+    .status.error {
+      color: #dc2626;
+    }
+
+    .layer-description {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+      padding-left: 28px;
+      line-height: 1.4;
+    }
+
+    .style-legend {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 16px;
+      font-size: 11px;
+    }
+
+    .style-legend h3 {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #1a1a1a;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+    }
+
+    .legend-label {
+      font-size: 11px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="sidebar">
+      <h1>🗺️ Esri Layers Demo</h1>
+
+      <div class="info-panel">
+        <strong>📍 Instructions</strong>
+        Check/uncheck layers to toggle them on the map. Use the layer control in the top-right of the map for additional options.
+      </div>
+
+      <div class="button-group">
+        <button class="btn-primary" onclick="loadAllLayers()">Load All</button>
+        <button class="btn-secondary" onclick="clearAllLayers()">Clear All</button>
+      </div>
+
+      <div class="layer-group">
+        <h2>Boundaries (Blue)</h2>
+        <div class="layer-item">
+          <input type="checkbox" id="boundaries" onchange="toggleLayer('state-boundaries', this.checked)">
+          <label for="boundaries">State Boundaries</label>
+          <div class="layer-color" style="background: #3b82f6;"></div>
+        </div>
+        <div class="layer-description">
+          Political boundaries with blue fill and dark blue stroke. Opacity: 30%
+        </div>
+      </div>
+
+      <div class="layer-group">
+        <h2>Routes (Green)</h2>
+        <div class="layer-item">
+          <input type="checkbox" id="routes" onchange="toggleLayer('transportation-routes', this.checked)">
+          <label for="routes">Transportation Routes</label>
+          <div class="layer-color" style="background: #10b981;"></div>
+        </div>
+        <div class="layer-description">
+          Roads and highways with green dashed lines. No fill.
+        </div>
+      </div>
+
+      <div class="layer-group">
+        <h2>Regions (Red)</h2>
+        <div class="layer-item">
+          <input type="checkbox" id="regions" onchange="toggleLayer('administrative-regions', this.checked)">
+          <label for="regions">Administrative Regions</label>
+          <div class="layer-color" style="background: #ef4444;"></div>
+        </div>
+        <div class="layer-description">
+          Geographic regions with red fill and dark red stroke. Opacity: 20%
+        </div>
+      </div>
+
+      <div class="layer-group">
+        <h2>Hydrology (Cyan)</h2>
+        <div class="layer-item">
+          <input type="checkbox" id="hydrology" onchange="toggleLayer('water-bodies', this.checked)">
+          <label for="hydrology">Water Bodies</label>
+          <div class="layer-color" style="background: #06b6d4;"></div>
+        </div>
+        <div class="layer-description">
+          Rivers, lakes, and water features with cyan fill. Opacity: 40%
+        </div>
+      </div>
+
+      <div class="layer-group">
+        <h2>Hazards (Orange)</h2>
+        <div class="layer-item">
+          <input type="checkbox" id="hazards" onchange="toggleLayer('hazard-zones', this.checked)">
+          <label for="hazards">Hazard Zones</label>
+          <div class="layer-color" style="background: #fb923c;"></div>
+        </div>
+        <div class="layer-description">
+          Risk areas and warning zones with orange fill. Opacity: 30%
+        </div>
+      </div>
+
+      <div class="style-legend">
+        <h3>Style Properties</h3>
+        <div class="legend-item">
+          <span class="legend-label">✓ Dynamic colors based on feature properties</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-label">✓ Hover effects (increased opacity & weight)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-label">✓ Interactive popups on click</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-label">✓ Layer control toggle in top-right</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="map-container">
+      <iframe id="mapFrame" src="MapView.html"></iframe>
+      <div class="status" id="status">Ready</div>
+    </div>
+  </div>
+
+  <script>
+    const mapFrame = document.getElementById('mapFrame');
+    const statusEl = document.getElementById('status');
+    const layerStates = {
+      'state-boundaries': false,
+      'transportation-routes': false,
+      'administrative-regions': false,
+      'water-bodies': false,
+      'hazard-zones': false
+    };
+
+    const layerConfig = {
+      'state-boundaries': {
+        url: 'https://services.arcgisonline.com/arcgis/rest/services/USA_Topo_Maps/MapServer/26',
+        type: 'boundaries'
+      },
+      'transportation-routes': {
+        url: 'https://services.arcgisonline.com/arcgis/rest/services/USA_Topo_Maps/MapServer/10',
+        type: 'routes'
+      },
+      'administrative-regions': {
+        url: 'https://services.arcgisonline.com/arcgis/rest/services/USA_Topo_Maps/MapServer/5',
+        type: 'regions'
+      },
+      'water-bodies': {
+        url: 'https://services.arcgisonline.com/arcgis/rest/services/USA_Topo_Maps/MapServer/8',
+        type: 'hydrology'
+      },
+      'hazard-zones': {
+        url: 'https://services.arcgisonline.com/arcgis/rest/services/USA_Topo_Maps/MapServer/15',
+        type: 'hazards'
+      }
+    };
+
+    function updateStatus(message, type = 'info') {
+      statusEl.textContent = message;
+      statusEl.className = `status ${type}`;
+      console.log(`[Status] ${message}`);
+    }
+
+    function sendToMap(message) {
+      try {
+        const mapWindow = mapFrame.contentWindow;
+        if (mapWindow && mapWindow.handleMapMessage) {
+          mapWindow.handleMapMessage(JSON.stringify(message));
+          return true;
+        } else {
+          console.warn('Map window not ready');
+          return false;
+        }
+      } catch (error) {
+        console.error('Error sending message to map:', error);
+        return false;
+      }
+    }
+
+    function toggleLayer(layerId, shouldShow) {
+      const config = layerConfig[layerId];
+      if (!config) {
+        console.error(`Unknown layer: ${layerId}`);
+        return;
+      }
+
+      if (shouldShow && !layerStates[layerId]) {
+        // Load and toggle on
+        updateStatus(`Loading ${layerId}...`, 'loading');
+        
+        const message = {
+          type: 'loadEsriLayer',
+          layerId: layerId,
+          url: config.url,
+          options: {
+            esriLayerType: config.type
+          }
+        };
+
+        if (sendToMap(message)) {
+          layerStates[layerId] = true;
+          updateStatus(`✓ ${layerId} loaded`, 'success');
+        } else {
+          updateStatus(`✗ Failed to load ${layerId}`, 'error');
+          document.getElementById(layerId.split('-')[0]).checked = false;
+        }
+      } else if (!shouldShow && layerStates[layerId]) {
+        // Toggle off
+        const message = {
+          type: 'toggleLayer',
+          layerId: layerId
+        };
+
+        if (sendToMap(message)) {
+          layerStates[layerId] = false;
+          updateStatus(`✓ ${layerId} hidden`, 'success');
+        }
+      }
+    }
+
+    function loadAllLayers() {
+      updateStatus('Loading all layers...', 'loading');
+      
+      Object.keys(layerConfig).forEach(layerId => {
+        const checkbox = document.getElementById(layerId.split('-')[0]);
+        if (checkbox) {
+          checkbox.checked = true;
+          toggleLayer(layerId, true);
+        }
+      });
+    }
+
+    function clearAllLayers() {
+      updateStatus('Clearing all layers...', 'loading');
+      
+      const message = { type: 'clearLayers' };
+      if (sendToMap(message)) {
+        Object.keys(layerStates).forEach(layerId => {
+          layerStates[layerId] = false;
+          const checkboxId = layerId.split('-')[0];
+          const checkbox = document.getElementById(checkboxId);
+          if (checkbox) checkbox.checked = false;
+        });
+        updateStatus('✓ All layers cleared', 'success');
+      }
+    }
+
+    // Listen for map ready event
+    window.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'mapReady') {
+          updateStatus('✓ Map ready', 'success');
+        } else if (data.type === 'layerLoaded') {
+          if (data.success) {
+            updateStatus(`✓ Layer loaded: ${data.layerId}`, 'success');
+          } else {
+            updateStatus(`✗ Error: ${data.message}`, 'error');
+          }
+        } else if (data.type === 'layerToggled') {
+          const status = data.visible ? 'visible' : 'hidden';
+          updateStatus(`✓ Layer ${status}: ${data.layerId}`, 'success');
+        }
+      } catch (e) {
+        // Ignore non-JSON messages
+      }
+    });
+
+    // Wait for map to load
+    mapFrame.onload = () => {
+      updateStatus('Map loaded, initializing...', 'loading');
+      setTimeout(() => {
+        updateStatus('Ready to load layers', 'success');
+      }, 1000);
+    };
+
+    // Initial status
+    updateStatus('Loading map...', 'loading');
+  </script>
+</body>
+</html>
