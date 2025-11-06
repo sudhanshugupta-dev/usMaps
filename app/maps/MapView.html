@@ -19,6 +19,11 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.1/MarkerCluster.Default.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.1/leaflet.markercluster.min.js"></script>
   
+  <!-- Esri Leaflet Plugin -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/esri-leaflet@3.0.10/dist/esri-leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/esri-leaflet-vector@4.0.1/dist/esri-leaflet-vector.js"></script>
+  
   <style>
     * {
       margin: 0;
@@ -84,15 +89,252 @@
       font-size: 14px;
       line-height: 1.6;
     }
+
+    /* ============================================================================
+       LEGEND STYLING
+       ============================================================================ */
     
-    /* Enhanced political layer styles */
+    .legend-control {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 280px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .legend-control::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .legend-control::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+
+    .legend-control::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 3px;
+    }
+
+    .legend-control::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+
+    .legend-title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 12px;
+      color: #333;
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+      padding: 6px 0;
+    }
+
+    .legend-color-box {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      margin-right: 10px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      flex-shrink: 0;
+    }
+
+    .legend-label {
+      flex: 1;
+      color: #555;
+      font-size: 12px;
+    }
+
+    .legend-range {
+      font-weight: 500;
+      color: #333;
+    }
+
+    .legend-divider {
+      height: 1px;
+      background: #e0e0e0;
+      margin: 10px 0;
+    }
+
+    .legend-property-name {
+      font-size: 11px;
+      color: #999;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #f0f0f0;
+      font-style: italic;
+    }
+
+    .leaflet-control-legend {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+    }
+    
+    /* ============================================================================
+       LAYER CUSTOMIZATION - COLORS & SHAPES
+       ============================================================================ */
+    
+    /* Political Boundaries - Blue with solid stroke */
     .political-boundary {
       fill: none;
-      stroke: #4a6da7;
+      stroke: #1e3a8a;
+      stroke-width: 2.5px;
+      stroke-linejoin: round;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    }
+    
+    .political-boundary:hover {
+      stroke: #1e40af;
+      stroke-width: 3.5px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+    }
+    
+    /* County Boundaries - Green with dashed pattern */
+    .county-boundary {
+      fill: none;
+      stroke: #16a34a;
+      stroke-width: 1.8px;
+      stroke-dasharray: 5, 3;
+      stroke-linejoin: round;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,0.08));
+    }
+    
+    .county-boundary:hover {
+      stroke: #15803d;
+      stroke-width: 2.5px;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.15));
+    }
+    
+    /* Region Boundaries - Red with dotted pattern */
+    .region-boundary {
+      fill: none;
+      stroke: #dc2626;
+      stroke-width: 2px;
+      stroke-dasharray: 2, 4;
+      stroke-linejoin: round;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    }
+    
+    .region-boundary:hover {
+      stroke: #b91c1c;
+      stroke-width: 3px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+    }
+    
+    /* Hydrology - Cyan with wave pattern */
+    .hydrology-layer {
+      fill: none;
+      stroke: #0891b2;
       stroke-width: 2px;
       stroke-linejoin: round;
       transition: all 0.3s ease;
       filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    }
+    
+    .hydrology-layer:hover {
+      stroke: #0e7490;
+      stroke-width: 2.8px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+    }
+    
+    /* Utilities - Yellow/Gold with dotted pattern */
+    .utilities-layer {
+      fill: none;
+      stroke: #ca8a04;
+      stroke-width: 1.5px;
+      stroke-dasharray: 3, 2;
+      stroke-linejoin: round;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,0.08));
+    }
+    
+    .utilities-layer:hover {
+      stroke: #a16207;
+      stroke-width: 2.2px;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.15));
+    }
+    
+    /* Hazards - Orange with warning pattern */
+    .hazards-layer {
+      fill: none;
+      stroke: #ea580c;
+      stroke-width: 2.2px;
+      stroke-dasharray: 4, 2;
+      stroke-linejoin: round;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    }
+    
+    .hazards-layer:hover {
+      stroke: #c2410c;
+      stroke-width: 3.2px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+    }
+    
+    /* Demographics - Purple with mixed pattern */
+    .demographics-layer {
+      fill: none;
+      stroke: #7c3aed;
+      stroke-width: 2px;
+      stroke-dasharray: 6, 3;
+      stroke-linejoin: round;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    }
+    
+    .demographics-layer:hover {
+      stroke: #6d28d9;
+      stroke-width: 2.8px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+    }
+    
+    /* Choropleth - Gradient fills */
+    .choropleth-layer {
+      stroke: #475569;
+      stroke-width: 1px;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,0.08));
+    }
+    
+    .choropleth-layer:hover {
+      stroke: #1e293b;
+      stroke-width: 1.5px;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.15));
+    }
+    
+    /* Heatmap - Red gradient */
+    .heatmap-layer {
+      opacity: 0.8;
+      transition: opacity 0.3s ease;
+    }
+    
+    .heatmap-layer:hover {
+      opacity: 0.95;
+    }
+    
+    /* Cluster - Blue with circle markers */
+    .cluster-layer {
+      opacity: 0.85;
+      transition: opacity 0.3s ease;
+    }
+    
+    .cluster-layer:hover {
+      opacity: 0.95;
     }
     
     .political-boundary:hover {
@@ -346,6 +588,177 @@
       color: white;
       box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
     }
+    
+    /* Legend Panel */
+    .legend-panel {
+      position: absolute;
+      bottom: 360px;
+      left: 20px;
+      z-index: 1001;
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      max-width: 320px;
+      font-size: 13px;
+      color: #333;
+      max-height: 300px;
+      overflow-y: auto;
+      pointer-events: auto;
+    }
+
+    .legend-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .legend-panel::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+
+    .legend-panel::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 3px;
+    }
+
+    .legend-panel::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+    
+    .legend-panel-title {
+      font-weight: bold;
+      font-size: 15px;
+      margin-bottom: 12px;
+      color: #1a1a1a;
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 8px;
+    }
+    
+    .legend-panel-content {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .legend-panel-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+    }
+    
+    .legend-panel-color-box {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      flex-shrink: 0;
+    }
+    
+    .legend-panel-info {
+      flex: 1;
+    }
+    
+    .legend-panel-value {
+      font-weight: 600;
+      font-size: 12px;
+      color: #333;
+    }
+    
+    .legend-panel-label {
+      font-size: 11px;
+      color: #666;
+      margin-top: 2px;
+    }
+    
+    .legend-panel-property {
+      font-size: 11px;
+      color: #999;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #f0f0f0;
+      font-style: italic;
+    }
+    
+    /* Layer control styling */
+    .leaflet-control-layers {
+      border-radius: 12px !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+      border: none !important;
+    }
+    
+    .leaflet-control-layers-toggle {
+      width: 40px !important;
+      height: 40px !important;
+      background-color: #007bff !important;
+      border-radius: 8px !important;
+    }
+    
+    .leaflet-control-layers-toggle:hover {
+      background-color: #0056b3 !important;
+    }
+    
+    .leaflet-control-layers-list {
+      padding: 12px !important;
+    }
+    
+    .leaflet-control-layers-selector {
+      margin-right: 8px !important;
+      cursor: pointer !important;
+    }
+    
+    .leaflet-control-layers label {
+      font-size: 13px !important;
+      color: #333 !important;
+      display: flex !important;
+      align-items: center !important;
+      padding: 6px 0 !important;
+      cursor: pointer !important;
+    }
+    
+    .leaflet-control-layers label:hover {
+      color: #007bff !important;
+    }
+    
+    /* Esri Feature Layer specific styles */
+    .esri-feature-layer {
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+      transition: all 0.3s ease;
+    }
+    
+    .esri-feature-layer:hover {
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));
+    }
+    
+    /* Dynamic layer styles */
+    .layer-boundaries {
+      stroke: #1e3a8a;
+      stroke-width: 2px;
+      fill: #3b82f6;
+      fill-opacity: 0.3;
+    }
+    
+    .layer-routes {
+      stroke: #10b981;
+      stroke-width: 3px;
+      fill: none;
+    }
+    
+    .layer-regions {
+      stroke: #dc2626;
+      stroke-width: 2px;
+      fill: #ef4444;
+      fill-opacity: 0.2;
+    }
+    
+    .layer-overlay {
+      transition: all 0.3s ease;
+    }
+    
+    .layer-overlay:hover {
+      opacity: 0.9 !important;
+      stroke-width: 3px !important;
+    }
   </style>
 </head>
 <body>
@@ -401,6 +814,12 @@
     <div class="layer-status" id="layerStatus"></div>
   </div>
   
+  <!-- Legend Panel -->
+  <div class="legend-panel" id="legendPanel" style="display: none;">
+    <div class="legend-panel-title">🎨 Color Legend</div>
+    <div class="legend-panel-content" id="legendPanelContent"></div>
+  </div>
+  
   <!-- Legend (hidden by default) -->
   <div class="legend" id="legend" style="display: none;">
     <div class="legend-title" id="legendTitle">Legend</div>
@@ -447,6 +866,187 @@
       oranges: ['#fff5eb', '#fee6ce', '#fdd0a2', '#fdae6b', '#fd8d3c', '#f16913', '#d94801', '#a63603', '#7f2704'],
       teals: ['#f7fcfd', '#e5f5f9', '#ccece6', '#99d8c9', '#66c2a4', '#41ae76', '#238b45', '#006d2c', '#00441b'],
     };
+
+    // ============================================================================
+    // LAYER CUSTOMIZATION CONFIGURATION
+    // ============================================================================
+    
+    const LAYER_STYLES = {
+      'political-boundaries': {
+        className: 'political-boundary',
+        color: '#1e3a8a',
+        weight: 2.5,
+        opacity: 1,
+        fillOpacity: 0,
+        dashArray: '',
+        pattern: 'solid',
+        shape: 'line',
+        hoverColor: '#1e40af',
+        hoverWeight: 3.5,
+        description: 'Political boundaries with solid blue lines'
+      },
+      'county-map': {
+        className: 'county-boundary',
+        color: '#16a34a',
+        weight: 1.8,
+        opacity: 1,
+        fillOpacity: 0,
+        dashArray: '5, 3',
+        pattern: 'dashed',
+        shape: 'line',
+        hoverColor: '#15803d',
+        hoverWeight: 2.5,
+        description: 'County boundaries with green dashed lines'
+      },
+      'region-boundaries': {
+        className: 'region-boundary',
+        color: '#dc2626',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0,
+        dashArray: '2, 4',
+        pattern: 'dotted',
+        shape: 'line',
+        hoverColor: '#b91c1c',
+        hoverWeight: 3,
+        description: 'Regional boundaries with red dotted lines'
+      },
+      'hydrology': {
+        className: 'hydrology-layer',
+        color: '#0891b2',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.2,
+        dashArray: '',
+        pattern: 'solid',
+        shape: 'polygon',
+        hoverColor: '#0e7490',
+        hoverWeight: 2.8,
+        description: 'Water bodies with cyan coloring'
+      },
+      'utilities': {
+        className: 'utilities-layer',
+        color: '#ca8a04',
+        weight: 1.5,
+        opacity: 1,
+        fillOpacity: 0,
+        dashArray: '3, 2',
+        pattern: 'dotted',
+        shape: 'line',
+        hoverColor: '#a16207',
+        hoverWeight: 2.2,
+        description: 'Utilities with gold dotted lines'
+      },
+      'hazards': {
+        className: 'hazards-layer',
+        color: '#ea580c',
+        weight: 2.2,
+        opacity: 1,
+        fillOpacity: 0.15,
+        dashArray: '4, 2',
+        pattern: 'dashed',
+        shape: 'polygon',
+        hoverColor: '#c2410c',
+        hoverWeight: 3.2,
+        description: 'Hazard zones with orange warning pattern'
+      },
+      'demographics': {
+        className: 'demographics-layer',
+        color: '#7c3aed',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0,
+        dashArray: '6, 3',
+        pattern: 'mixed',
+        shape: 'line',
+        hoverColor: '#6d28d9',
+        hoverWeight: 2.8,
+        description: 'Demographic data with purple mixed pattern'
+      },
+      'choropleth': {
+        className: 'choropleth-layer',
+        color: '#475569',
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.7,
+        dashArray: '',
+        pattern: 'solid',
+        shape: 'polygon',
+        hoverColor: '#1e293b',
+        hoverWeight: 1.5,
+        description: 'Choropleth map with gradient fills'
+      },
+      'heatmap': {
+        className: 'heatmap-layer',
+        color: 'transparent',
+        weight: 0,
+        opacity: 0.8,
+        fillOpacity: 0.8,
+        dashArray: '',
+        pattern: 'gradient',
+        shape: 'heatmap',
+        hoverColor: 'transparent',
+        hoverWeight: 0,
+        description: 'Heatmap with red gradient'
+      },
+      'cluster-map': {
+        className: 'cluster-layer',
+        color: '#1f77b4',
+        weight: 2,
+        opacity: 0.85,
+        fillOpacity: 0.7,
+        dashArray: '',
+        pattern: 'solid',
+        shape: 'circle',
+        hoverColor: '#0056b3',
+        hoverWeight: 2.5,
+        description: 'Clustered markers with blue circles'
+      }
+    };
+
+    /**
+     * Get layer style configuration
+     */
+    function getLayerStyle(layerId) {
+      return LAYER_STYLES[layerId] || LAYER_STYLES['political-boundaries'];
+    }
+
+    /**
+     * Apply custom styling to layer
+     */
+    function applyLayerStyle(layer, layerId) {
+      const style = getLayerStyle(layerId);
+      if (!layer || !style) return;
+
+      layer.setStyle({
+        color: style.color,
+        weight: style.weight,
+        opacity: style.opacity,
+        fillOpacity: style.fillOpacity,
+        dashArray: style.dashArray,
+        className: style.className
+      });
+
+      // Add hover effects
+      layer.on('mouseover', function() {
+        this.setStyle({
+          color: style.hoverColor,
+          weight: style.hoverWeight,
+          opacity: 1,
+          fillOpacity: Math.min(style.fillOpacity + 0.2, 0.9)
+        });
+        this.bringToFront();
+      });
+
+      layer.on('mouseout', function() {
+        this.setStyle({
+          color: style.color,
+          weight: style.weight,
+          opacity: style.opacity,
+          fillOpacity: style.fillOpacity
+        });
+      });
+    }
 
     // ============================================================================
     // UTILITY FUNCTIONS
@@ -628,6 +1228,145 @@
       currentLegend = null;
     }
 
+    // ============================================================================
+    // ESRI FEATURE LAYER WITH DYNAMIC STYLING
+    // ============================================================================
+    
+    /**
+     * Create a dynamic style function for Esri Feature Layers
+     */
+    function createDynamicStyleFunction(layerType, property) {
+      return function(feature) {
+        let style = {
+          color: '#1e3a8a',
+          weight: 2,
+          opacity: 0.8,
+          fillOpacity: 0.6,
+          dashArray: ''
+        };
+        
+        // Apply layer-specific styles
+        switch(layerType) {
+          case 'boundaries':
+            style.color = '#1e3a8a';
+            style.fillColor = '#3b82f6';
+            style.weight = 2;
+            style.fillOpacity = 0.3;
+            break;
+          case 'routes':
+            style.color = '#10b981';
+            style.weight = 3;
+            style.fill = false;
+            style.dashArray = '5, 5';
+            break;
+          case 'regions':
+            style.color = '#dc2626';
+            style.fillColor = '#ef4444';
+            style.weight = 2;
+            style.fillOpacity = 0.2;
+            break;
+          case 'hydrology':
+            style.color = '#0ea5e9';
+            style.fillColor = '#06b6d4';
+            style.weight = 1.5;
+            style.fillOpacity = 0.4;
+            break;
+          case 'hazards':
+            style.color = '#f97316';
+            style.fillColor = '#fb923c';
+            style.weight = 2;
+            style.fillOpacity = 0.3;
+            break;
+          default:
+            style.color = '#6366f1';
+            style.fillColor = '#818cf8';
+            style.fillOpacity = 0.3;
+        }
+        
+        // Apply property-based coloring if available
+        if (property && feature.properties && feature.properties[property]) {
+          const value = feature.properties[property];
+          const hue = layerType === 'boundaries' ? 210 : 
+                      layerType === 'routes' ? 120 :
+                      layerType === 'regions' ? 0 : 200;
+          
+          // Normalize value to 0-1 range for color intensity
+          const normalized = Math.min(Math.max(value / 100, 0), 1);
+          const lightness = 30 + (normalized * 50);
+          style.fillColor = `hsl(${hue}, 100%, ${lightness}%)`;
+        }
+        
+        return style;
+      };
+    }
+    
+    /**
+     * Create an Esri Feature Layer with dynamic styling
+     */
+    function createEsriFeatureLayer(url, layerId, layerType = 'boundaries', options = {}) {
+      const {
+        property = null,
+        onEachFeature = null,
+        popupTemplate = null
+      } = options;
+      
+      // Create the feature layer
+      const featureLayer = L.esri.featureLayer({
+        url: url,
+        style: createDynamicStyleFunction(layerType, property),
+        onEachFeature: function(feature, layer) {
+          // Add popup if template provided
+          if (popupTemplate) {
+            const popupContent = typeof popupTemplate === 'function' 
+              ? popupTemplate(feature)
+              : popupTemplate;
+            layer.bindPopup(popupContent);
+          } else if (feature.properties) {
+            // Default popup with feature properties
+            const props = Object.entries(feature.properties)
+              .slice(0, 5)
+              .map(([k, v]) => `<div class="popup-detail"><strong>${k}:</strong> ${v}</div>`)
+              .join('');
+            layer.bindPopup(`<div>${props}</div>`);
+          }
+          
+          // Custom onEachFeature handler
+          if (onEachFeature) {
+            onEachFeature(feature, layer);
+          }
+          
+          // Add hover effects
+          layer.on('mouseover', function() {
+            this.setStyle({
+              weight: 3,
+              opacity: 1,
+              fillOpacity: 0.8
+            });
+            this.bringToFront();
+          });
+          
+          layer.on('mouseout', function() {
+            featureLayer.resetStyle(this);
+          });
+        }
+      });
+      
+      // Add load event handler
+      featureLayer.on('load', function() {
+        console.log(`[Esri] Feature Layer ${layerId} loaded successfully`);
+        activeLayers.add(layerId);
+        updateInfoPanel();
+        sendMessage('layerLoaded', { layerId, success: true, type: 'esri' });
+      });
+      
+      featureLayer.on('error', function(error) {
+        console.error(`[Esri] Error loading ${layerId}:`, error);
+        sendMessage('layerLoaded', { layerId, success: false, message: error.message });
+      });
+      
+      return featureLayer;
+    }
+    
     // ============================================================================
     // ENHANCED GEOJSON LAYER
     // ============================================================================
@@ -1290,6 +2029,226 @@
     }
 
     // ============================================================================
+    // LEGEND MANAGEMENT
+    // ============================================================================
+    
+    let legendControl = null;
+    let currentLegendData = null;
+
+    /**
+     * Create legend HTML with color boxes and ranges
+     */
+    function createLegendHTML(dataProperty, dataRange, colorScheme, colors) {
+      if (!dataProperty || !dataRange || !colors || colors.length === 0) {
+        return '<div class="legend-title">No Data</div>';
+      }
+
+      const { min, max } = dataRange;
+      const range = max - min;
+      let html = `<div class="legend-title">${dataProperty}</div>`;
+
+      // Create color gradient legend
+      colors.forEach((color, index) => {
+        const percentage = (index / (colors.length - 1)) * 100;
+        const value = min + (range * (index / (colors.length - 1)));
+        const displayValue = value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+        
+        html += `
+          <div class="legend-item">
+            <div class="legend-color-box" style="background-color: ${color};"></div>
+            <div class="legend-label">
+              <span class="legend-range">${displayValue}</span>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `<div class="legend-property-name">Scheme: ${colorScheme}</div>`;
+      return html;
+    }
+
+    /**
+     * Update legend on map
+     */
+    function updateLegend(dataProperty, dataRange, colorScheme, colors) {
+      // Remove existing legend if present
+      if (legendControl) {
+        map.removeControl(legendControl);
+      }
+
+      if (!dataProperty || !dataRange) {
+        return;
+      }
+
+      currentLegendData = { dataProperty, dataRange, colorScheme, colors };
+
+      // Create legend control
+      legendControl = L.control({ position: 'bottomright' });
+
+      legendControl.onAdd = function() {
+        const div = L.DomUtil.create('div', 'legend-control');
+        div.innerHTML = createLegendHTML(dataProperty, dataRange, colorScheme, colors);
+        
+        // Prevent map interaction when scrolling legend
+        L.DomEvent.disableScrollPropagation(div);
+        L.DomEvent.disableClickPropagation(div);
+        
+        return div;
+      };
+
+      legendControl.addTo(map);
+      console.log('[Legend] Updated with property:', dataProperty, 'range:', dataRange);
+    }
+
+    /**
+     * Clear legend from map
+     */
+    function clearLegend() {
+      if (legendControl) {
+        map.removeControl(legendControl);
+        legendControl = null;
+        currentLegendData = null;
+      }
+    }
+
+    /**
+     * Update legend panel with color-coded information
+     */
+    function updateLegendPanel(dataProperty, dataRange, colorScheme, colors) {
+      console.log('[LegendPanel] updateLegendPanel called with:', { dataProperty, dataRange, colorScheme, colorsCount: colors?.length });
+      
+      if (!dataProperty || !dataRange || !colors || colors.length === 0) {
+        console.log('[LegendPanel] Missing data, hiding panel');
+        const panel = document.getElementById('legendPanel');
+        if (panel) panel.style.display = 'none';
+        return;
+      }
+
+      const { min, max } = dataRange;
+      const range = max - min;
+      const legendPanel = document.getElementById('legendPanel');
+      const legendContent = document.getElementById('legendPanelContent');
+      
+      console.log('[LegendPanel] Panel element:', legendPanel ? 'found' : 'NOT FOUND');
+      console.log('[LegendPanel] Content element:', legendContent ? 'found' : 'NOT FOUND');
+      
+      if (!legendPanel || !legendContent) {
+        console.error('[LegendPanel] ❌ Panel or content element not found in DOM');
+        return;
+      }
+      
+      let html = '';
+      
+      // Create color gradient legend items
+      colors.forEach((color, index) => {
+        const value = min + (range * (index / (colors.length - 1)));
+        const displayValue = value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+        const nextValue = index < colors.length - 1 
+          ? (min + (range * ((index + 1) / (colors.length - 1)))).toLocaleString('en-US', { maximumFractionDigits: 0 })
+          : displayValue;
+        
+        html += `
+          <div class="legend-panel-item">
+            <div class="legend-panel-color-box" style="background-color: ${color};"></div>
+            <div class="legend-panel-info">
+              <div class="legend-panel-value">${displayValue}</div>
+              <div class="legend-panel-label">${index === colors.length - 1 ? 'Max' : 'to ' + nextValue}</div>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += `<div class="legend-panel-property">Property: <strong>${dataProperty}</strong><br>Scheme: <strong>${colorScheme}</strong></div>`;
+      
+      legendContent.innerHTML = html;
+      legendPanel.style.display = 'block';
+      
+      console.log('[LegendPanel] ✅ Updated with property:', dataProperty, 'colors:', colors);
+    }
+
+    /**
+     * Clear legend panel
+     */
+    function clearLegendPanel() {
+      const legendPanel = document.getElementById('legendPanel');
+      legendPanel.style.display = 'none';
+      document.getElementById('legendPanelContent').innerHTML = '';
+    }
+
+    // ============================================================================
+    // LAYER CONTROL MANAGEMENT
+    // ============================================================================
+    
+    let layerControl = null;
+    const baseLayerGroup = {};
+    const overlayLayerGroup = {};
+    
+    /**
+     * Initialize layer control with base layers and overlays
+     */
+    function initializeLayerControl() {
+      // Create base layer (OSM is already added, but we'll add it to control)
+      baseLayerGroup['OpenStreetMap'] = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors',
+      });
+      
+      // Create layer control
+      layerControl = L.control.layers(baseLayerGroup, overlayLayerGroup, {
+        position: 'topright',
+        collapsed: true,
+        hideSingleBase: false
+      });
+      
+      layerControl.addTo(map);
+      console.log('[LayerControl] Initialized');
+    }
+    
+    /**
+     * Add a layer to the layer control
+     */
+    function addLayerToControl(layerId, layer, isOverlay = true) {
+      const displayName = layerId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      
+      if (isOverlay) {
+        overlayLayerGroup[displayName] = layer;
+        if (layerControl) {
+          layerControl.addOverlay(layer, displayName);
+        }
+      } else {
+        baseLayerGroup[displayName] = layer;
+        if (layerControl) {
+          layerControl.addBaseLayer(layer, displayName);
+        }
+      }
+    }
+    
+    /**
+     * Remove a layer from the layer control
+     */
+    function removeLayerFromControl(layerId) {
+      const displayName = layerId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      
+      if (overlayLayerGroup[displayName]) {
+        delete overlayLayerGroup[displayName];
+      }
+      if (baseLayerGroup[displayName]) {
+        delete baseLayerGroup[displayName];
+      }
+      
+      // Recreate layer control
+      if (layerControl) {
+        map.removeControl(layerControl);
+        layerControl = L.control.layers(baseLayerGroup, overlayLayerGroup, {
+          position: 'topright',
+          collapsed: true,
+          hideSingleBase: false
+        });
+        layerControl.addTo(map);
+      }
+    }
+    
+    // ============================================================================
     // LAYER LOADING
     // ============================================================================
     
@@ -1343,6 +2302,14 @@
             maxZoom: 19,
             attribution: 'Esri',
           });
+        } else if (layerType === 'esri-feature') {
+          // Load Esri Feature Layer with dynamic styling
+          const esriLayerType = options.esriLayerType || 'boundaries';
+          layer = createEsriFeatureLayer(url, layerId, esriLayerType, {
+            property: options.property || null,
+            onEachFeature: options.onEachFeature || null,
+            popupTemplate: options.popupTemplate || null
+          });
         } else {
           const data = await fetchGeoJSON(url);
           if (!data) throw new Error('Failed to fetch GeoJSON');
@@ -1368,6 +2335,10 @@
         if (layer) {
           layersRegistry[layerId] = layer;
           layerStates[layerId] = { loaded: true, visible: false };
+          
+          // Add to layer control
+          addLayerToControl(layerId, layer, true);
+          
           console.log(`[Load] ✅ Layer ${layerId} loaded successfully`);
           sendMessage('layerLoaded', { layerId, success: true });
           return true;
@@ -1407,6 +2378,7 @@
       }
 
       updateInfoPanel();
+      console.log(`[Toggle] Layer ${layerId} is now ${state.visible ? 'visible' : 'hidden'}`);
       sendMessage('layerToggled', { layerId, visible: state.visible });
       return state.visible;
     }
@@ -1551,6 +2523,9 @@
               toggleLayer(data.layerId);
             }
             break;
+          case 'loadEsriLayer':
+            loadLayer(data.layerId, data.url, 'esri-feature', data.options || {});
+            break;
           case 'clearLayers':
             clearAllLayers();
             break;
@@ -1595,9 +2570,22 @@
       clearAllLayers,
       getActiveLayers: () => Array.from(activeLayers),
       getLayerRegistry: () => layersRegistry,
+      initializeLayerControl,
+      addLayerToControl,
+      removeLayerFromControl,
+      createEsriFeatureLayer,
+      createDynamicStyleFunction,
+      updateLegend,
+      clearLegend,
+      updateLegendPanel,
+      clearLegendPanel
     };
 
-    console.log('✅ Enhanced map initialized');
+    // Initialize layer control on map ready
+    initializeLayerControl();
+    
+    console.log('✅ Enhanced map initialized with Esri Feature Layer support');
+    console.log('📍 Layer Control initialized');
     updateInfoPanel();
     sendMessage('mapReady', { success: true });
   </script>
