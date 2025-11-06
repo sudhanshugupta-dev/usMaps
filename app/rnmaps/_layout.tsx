@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import {
@@ -9,9 +9,14 @@ import {
 } from 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useKeepAwake } from 'expo-keep-awake';
+import { FullscreenProvider } from '@/app/rnmaps/context/FullscreenContext';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// Keep the screen awake when the app is active
+useKeepAwake();
 
 // Disable reanimated warnings
 configureReanimatedLogger({
@@ -22,7 +27,7 @@ configureReanimatedLogger({
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    SpaceMono: require('../../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
   useEffect(() => {
@@ -40,34 +45,9 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="index.tsx" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="maps/index"
-          options={{
-            title: 'Map Viewer',
-            headerShown: true,
-            headerBackTitle: 'Back',
-          }}
-        />
-         <Stack.Screen
-          name="rnmaps/(tabs)/index"
-          options={{
-            title: 'RN maps',
-            headerShown: true,
-            headerBackTitle: 'Back',
-          }}
-        />
-        <Stack.Screen
-          name="analytics/index"
-          options={{
-            title: 'Analytics',
-            headerShown: true,
-            headerBackTitle: 'Back',
-          }}
-        />
-        <Stack.Screen name="+not-found" />
-      </Stack>
+      <FullscreenProvider>
+        <Slot />
+      </FullscreenProvider>
     </ThemeProvider>
   );
 }
