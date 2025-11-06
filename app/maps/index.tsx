@@ -394,6 +394,12 @@ useEffect(() => {
    */
   const handleRouteSelect = (route: Route) => {
     console.log('[MapScreen] Route selected:', route.name, route.id);
+    if (selectedRoute?.id === route.id) {
+      console.log('[MapScreen] Route re-selected, clearing route');
+      handleClearRoute();
+      return;
+    }
+
     setSelectedRoute(route);
     
     // Send route to WebView to display on map
@@ -741,63 +747,306 @@ useEffect(() => {
           }
 
           /**
-           * Create a color for a layer based on its ID
+           * Layer styling configuration with colors and shapes
            */
-          function getLayerColor(layerId) {
-            const colors = {
-              'street-base': '#1f77b4',
-              satellite: '#ff7f0e',
-              'political-boundaries': '#ff7f0e',
-              'county-map': '#2ca02c',
-              choropleth: '#d62728',
-              heatmap: '#9467bd',
-              'cluster-map': '#8c564b',
-              'region-boundaries': '#e377c2',
-              hydrology: '#17becf',
-              utilities: '#bcbd22',
-              hazards: '#ff9896',
-              demographics: '#98df8a',
-            };
-            return colors[layerId] || '#1f77b4';
+          const LAYER_STYLES_CONFIG = {
+            'political-boundaries': {
+              color: '#1e3a8a',
+              weight: 2.5,
+              dashArray: '',
+              pattern: 'solid',
+              shape: 'line',
+              description: 'Political boundaries - Solid blue lines'
+            },
+            'county-map': {
+              color: '#16a34a',
+              weight: 1.8,
+              dashArray: '5, 3',
+              pattern: 'dashed',
+              shape: 'line',
+              description: 'County boundaries - Green dashed lines'
+            },
+            'region-boundaries': {
+              color: '#dc2626',
+              weight: 2,
+              dashArray: '2, 4',
+              pattern: 'dotted',
+              shape: 'line',
+              description: 'Regional boundaries - Red dotted lines'
+            },
+            'hydrology': {
+              color: '#0891b2',
+              weight: 2,
+              dashArray: '',
+              pattern: 'solid',
+              shape: 'polygon',
+              description: 'Water bodies - Cyan coloring'
+            },
+            'utilities': {
+              color: '#ca8a04',
+              weight: 1.5,
+              dashArray: '3, 2',
+              pattern: 'dotted',
+              shape: 'line',
+              description: 'Utilities - Gold dotted lines'
+            },
+            'hazards': {
+              color: '#ea580c',
+              weight: 2.2,
+              dashArray: '4, 2',
+              pattern: 'dashed',
+              shape: 'polygon',
+              description: 'Hazard zones - Orange warning pattern'
+            },
+            'demographics': {
+              color: '#7c3aed',
+              weight: 2,
+              dashArray: '6, 3',
+              pattern: 'mixed',
+              shape: 'line',
+              description: 'Demographic data - Purple mixed pattern'
+            },
+            'choropleth': {
+              color: '#475569',
+              weight: 1,
+              dashArray: '',
+              pattern: 'solid',
+              shape: 'polygon',
+              description: 'Choropleth map - Gradient fills'
+            },
+            'heatmap': {
+              color: 'transparent',
+              weight: 0,
+              dashArray: '',
+              pattern: 'gradient',
+              shape: 'heatmap',
+              description: 'Heatmap - Red gradient'
+            },
+            'cluster-map': {
+              color: '#1f77b4',
+              weight: 2,
+              dashArray: '',
+              pattern: 'solid',
+              shape: 'circle',
+              description: 'Clustered markers - Blue circles'
+            }
+          };
+
+          /**
+           * Color schemes for data-driven styling - 4 color density scheme
+           */
+          const DATA_COLOR_SCHEMES = {
+            density: ['#2c4a77ff', '#96960fff', '#FF8800', '#FF0000']
+          };
+
+          /**
+           * Detect numeric properties in features
+           */
+          function detectNumericProperties(data) {
+            if (!data || !data.features || data.features.length === 0) {
+              return [];
+            }
+
+            const numericProps = {};
+            
+            data.features.forEach(feature => {
+              if (feature.properties) {
+                Object.entries(feature.properties).forEach(([key, value]) => {
+                  if (typeof value === 'number' && !numericProps[key]) {
+                    numericProps[key] = true;
+                  }
+                });
+              }
+            });
+
+            return Object.keys(numericProps);
           }
 
           /**
-           * Create GeoJSON layer with styling
+           * Get min and max values for a property
            */
-          function createGeoJSONLayer(data, layerId, color) {
+          function getDataRange(data, property) {
+            let min = Infinity;
+            let max = -Infinity;
+
+            data.features.forEach(feature => {
+              if (feature.properties && feature.properties[property] !== undefined) {
+                const value = parseFloat(feature.properties[property]);
+                if (!isNaN(value)) {
+                  min = Math.min(min, value);
+                  max = Math.max(max, value);
+                }
+              }
+            });
+
+            return { min, max };
+          }
+
+          /**
+           * Get color from scheme based on normalized value (0-1)
+           */
+          function getColorFromScheme(normalizedValue, scheme = 'viridis') {
+            const colors = DATA_COLOR_SCHEMES[scheme] || DATA_COLOR_SCHEMES.viridis;
+            const index = Math.floor(normalizedValue * (colors.length - 1));
+            return colors[Math.max(0, Math.min(index, colors.length - 1))];
+          }
+
+          /**
+           * Get color based on data value
+           */
+          function getColorByDataValue(value, min, max, scheme = 'viridis') {
+            if (min === max) {
+              return getColorFromScheme(0.5, scheme);
+            }
+            const normalized = (value - min) / (max - min);
+            return getColorFromScheme(normalized, scheme);
+          }
+
+          /**
+           * Get layer style configuration
+           */
+          function getLayerStyle(layerId) {
+            return LAYER_STYLES_CONFIG[layerId] || LAYER_STYLES_CONFIG['political-boundaries'];
+          }
+
+          /**
+           * Get color for a layer based on its ID
+           */
+          function getLayerColor(layerId) {
+            const style = getLayerStyle(layerId);
+            return style.color;
+          }
+
+          /**
+           * Create GeoJSON layer with data-driven coloring
+           */
+          function createGeoJSONLayer(data, layerId, color, options = {}) {
             console.log('[createGeoJSONLayer] Creating GeoJSON layer for', layerId, 'with', data.features?.length || 0, 'features');
             
-            return L.geoJSON(data, {
+            const layerStyle = getLayerStyle(layerId);
+            
+            // Detect numeric properties for data-driven coloring
+            const numericProps = detectNumericProperties(data);
+            console.log('[createGeoJSONLayer] Detected numeric properties:', numericProps);
+            
+            // Use provided property or auto-detect the first numeric property
+            let dataProperty = options.dataProperty;
+            let colorScheme = options.colorScheme || 'density';
+            let dataRange = null;
+            
+            if (!dataProperty && numericProps.length > 0) {
+              // Auto-select first numeric property (usually area size)
+              dataProperty = numericProps[0];
+              console.log('[createGeoJSONLayer] Auto-selected data property:', dataProperty);
+            }
+            
+            // Calculate data range if using data-driven coloring
+            if (dataProperty) {
+              dataRange = getDataRange(data, dataProperty);
+              console.log('[createGeoJSONLayer] Data range for', dataProperty, ':', dataRange);
+            }
+            
+            const finalColor = color || layerStyle.color;
+            
+            // Store legend data for later use
+            const legendData = {
+              dataProperty,
+              dataRange,
+              colorScheme,
+              colors: DATA_COLOR_SCHEMES[colorScheme] || DATA_COLOR_SCHEMES.density
+            };
+            
+            const geoJsonLayer = L.geoJSON(data, {
               style: function(feature) {
+                let fillColor = finalColor;
+                
+                // Apply data-driven coloring if property exists
+                if (dataProperty && dataRange && feature.properties && feature.properties[dataProperty] !== undefined) {
+                  const value = parseFloat(feature.properties[dataProperty]);
+                  if (!isNaN(value)) {
+                    fillColor = getColorByDataValue(value, dataRange.min, dataRange.max, colorScheme);
+                  }
+                }
+                
                 return {
-                  color: color,
-                  weight: 2,
-                  opacity: 0.7,
-                  fillOpacity: 0.4,
+                  color: fillColor,
+                  weight: layerStyle.weight,
+                  opacity: 0.9,
+                  fillOpacity: 0.7,
+                  dashArray: layerStyle.dashArray,
+                  className: layerId
                 };
               },
               pointToLayer: (feature, latlng) => {
-                return L.circleMarker(latlng, {
-                  radius: 5,
-                  fillColor: color,
+                let markerColor = finalColor;
+                
+                // Apply data-driven coloring for points
+                if (dataProperty && dataRange && feature.properties && feature.properties[dataProperty] !== undefined) {
+                  const value = parseFloat(feature.properties[dataProperty]);
+                  if (!isNaN(value)) {
+                    markerColor = getColorByDataValue(value, dataRange.min, dataRange.max, colorScheme);
+                  }
+                }
+                
+                const markerOptions = {
+                  radius: layerStyle.shape === 'circle' ? 6 : 5,
+                  fillColor: markerColor,
                   color: '#fff',
                   weight: 2,
                   opacity: 1,
                   fillOpacity: 0.8,
-                });
+                };
+                
+                return L.circleMarker(latlng, markerOptions);
               },
               onEachFeature: (feature, layer) => {
+                // Add hover effects
+                layer.on('mouseover', function() {
+                  this.setStyle({
+                    weight: layerStyle.weight + 1.5,
+                    opacity: 1,
+                    fillOpacity: 0.9
+                  });
+                  this.bringToFront();
+                });
+                
+                layer.on('mouseout', function() {
+                  this.setStyle({
+                    weight: layerStyle.weight,
+                    opacity: 0.9,
+                    fillOpacity: 0.7
+                  });
+                });
+                
+                // Add popup with feature properties
                 if (feature.properties) {
                   const props = Object.entries(feature.properties)
-                    .slice(0, 5)
-                    .map(([k, v]) => \`<strong>\${k}:</strong> \${v}\`)
+                    .slice(0, 8)
+                    .map(([k, v]) => {
+                      const displayValue = typeof v === 'number' ? v.toLocaleString() : v;
+                      return \`<strong>\${k}:</strong> \${displayValue}\`;
+                    })
                     .join('<br>');
                   if (props) {
-                    layer.bindPopup(props);
+                    const popupContent = \`
+                      <div style="max-width: 300px; font-size: 12px;">
+                        <strong style="font-size: 14px; color: #333;">\${layerId}</strong>
+                        <hr style="margin: 5px 0;">
+                        \${props}
+                      </div>
+                    \`;
+                    layer.bindPopup(popupContent);
                   }
                 }
               },
             });
+            
+            // Attach legend data to layer for later use
+            if (geoJsonLayer) {
+              geoJsonLayer._legendData = legendData;
+            }
+            
+            return geoJsonLayer;
           }
 
           /**
@@ -1104,12 +1353,37 @@ try {
               map.removeLayer(layer);
               state.visible = false;
               activeLayers.delete(layerId);
+              
+              // Clear legend when hiding layer
+              if (window.mapAPI && window.mapAPI.clearLegend) {
+                window.mapAPI.clearLegend();
+              }
+              
+              // Clear legend panel when hiding layer
+              if (window.mapAPI && window.mapAPI.clearLegendPanel) {
+                window.mapAPI.clearLegendPanel();
+              }
             } else {
               // Show layer
               console.log('[toggleLayer] Showing layer ' + layerId);
               layer.addTo(map);
               state.visible = true;
               activeLayers.add(layerId);
+              
+              // Update legend when showing layer
+              if (layer._legendData && window.mapAPI && window.mapAPI.updateLegend) {
+                const { dataProperty, dataRange, colorScheme, colors } = layer._legendData;
+                window.mapAPI.updateLegend(dataProperty, dataRange, colorScheme, colors);
+              }
+              
+              // Update legend panel when showing layer
+              if (layer._legendData && window.mapAPI && window.mapAPI.updateLegendPanel) {
+                const { dataProperty, dataRange, colorScheme, colors } = layer._legendData;
+                console.log('[toggleLayer] Calling updateLegendPanel with:', { dataProperty, dataRange, colorScheme, colorsCount: colors?.length });
+                window.mapAPI.updateLegendPanel(dataProperty, dataRange, colorScheme, colors);
+              } else {
+                console.log('[toggleLayer] Legend data not available:', { hasLegendData: !!layer._legendData, hasMapAPI: !!window.mapAPI, hasUpdateLegendPanel: !!window.mapAPI?.updateLegendPanel });
+              }
             }
 
             console.log('[toggleLayer] ✅ Layer ' + layerId + ' is now ' + (state.visible ? 'visible' : 'hidden'));
@@ -1523,6 +1797,7 @@ window.focusZoomControl = function(focusType) {
           onRouteSelect={handleRouteSelect}
           onFocusChange={handleDirectionsFocusChange}
           selectedRoute={selectedRoute}
+          onClearRoute={handleClearRoute}
         />
 
         {/* Toast notifications */}

@@ -18,6 +18,7 @@ interface DirectionsPanelProps {
   onRouteSelect: (route: Route) => void;
   onFocusChange?: (hasFocus: boolean) => void;
   selectedRoute: Route | null;
+  onClearRoute?: () => void;
 }
 
 export const DirectionsPanel: React.FC<DirectionsPanelProps> = ({
@@ -26,6 +27,7 @@ export const DirectionsPanel: React.FC<DirectionsPanelProps> = ({
   onRouteSelect,
   onFocusChange,
   selectedRoute,
+  onClearRoute,
 }) => {
   const scale = useScale();
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -209,6 +211,17 @@ export const DirectionsPanel: React.FC<DirectionsPanelProps> = ({
               <Text style={styles.detailValue}>{selectedRoute.duration}</Text>
             </View>
           </View>
+          {onClearRoute && (
+            <TouchableOpacity
+              style={styles.clearRouteButton}
+              onPress={onClearRoute}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel="Clear selected route"
+            >
+              <Text style={styles.clearRouteButtonText}>Clear Route</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </Animated.View>
