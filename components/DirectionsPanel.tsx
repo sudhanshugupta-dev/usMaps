@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+} from 'react';
 import {
   View,
   Text,
@@ -6,11 +12,12 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
-  AccessibilityInfo,
+  findNodeHandle,
 } from 'react-native';
 import { useScale } from '@/hooks/useScale';
 import { PREDEFINED_ROUTES, Route } from '@/constants/directionsData';
-import { useTVFocus } from '@/hooks/useTVFocus';
+import { useTVFocus } from '@/hooks/useTVFocus'; // assuming this works with onUp/onDown
+import { MaterialIcons } from '@expo/vector-icons';
 
 interface DirectionsPanelProps {
   isOpen: boolean;
@@ -30,22 +37,25 @@ export const DirectionsPanel: React.FC<DirectionsPanelProps> = ({
   onClearRoute,
 }) => {
   const scale = useScale();
-  const [focusedIndex, setFocusedIndex] = useState(0);
+  const [focusedIndex, setFocusedIndex] = useState(0); // 0 to routes.length (close button)
+  const closeButtonRef = useRef<TouchableOpacity>(null);
+  const itemRefs = useRef<Array<TouchableOpacity | null>>([]);
+  const scrollRef = useRef<ScrollView>(null);
   const slideAnim = useRef(new Animated.Value(isOpen ? 0 : -350 * scale)).current;
-  const scaleAnims = useRef<{ [key: string]: Animated.Value }>({}).current;
+  const scaleAnims = useRef<Record<string, Animated.Value>>({}).current;
 
   const routes = useMemo(() => PREDEFINED_ROUTES, []);
+  const totalItems = routes.length + 1; // +1 for close button
 
-  // Initialize scale animations for each route
+  // === Initialize refs and animations ===
   useEffect(() => {
-    routes.forEach((route) => {
-      if (!scaleAnims[route.id]) {
-        scaleAnims[route.id] = new Animated.Value(1);
-      }
+    itemRefs.current = Array(routes.length).fill(null);
+    routes.forEach((r) => {
+      if (!scaleAnims[r.id]) scaleAnims[r.id] = new Animated.Value(1);
     });
-  }, [routes, scaleAnims]);
+  }, [routes]);
 
-  // Animate panel slide in/out
+  // === Panel open/close animation + focus init ===
   useEffect(() => {
     Animated.timing(slideAnim, {
       toValue: isOpen ? 0 : -350 * scale,
@@ -56,131 +66,167 @@ export const DirectionsPanel: React.FC<DirectionsPanelProps> = ({
     if (isOpen) {
       setFocusedIndex(0);
       onFocusChange?.(true);
+      // Defer focus to next frame
+      requestAnimationFrame(() => {
+        focusItemAtIndex(0);
+      });
     } else {
+      setFocusedIndex(0);
       onFocusChange?.(false);
     }
-  }, [isOpen, scale, slideAnim, onFocusChange]);
+  }, [isOpen]);
 
-  // Handle route selection
-  const handleSelectRoute = useCallback(
-    (route: Route) => {
-      onRouteSelect(route);
-    },
-    [onRouteSelect]
-  );
+  // === Focus item by index ===
+  const focusItemAtIndex = useCallback((index: number) => {
+    setFocusedIndex(index);
 
-  // TV Remote control
-  useTVFocus({
-    enabled: isOpen,
-    onUp: () => {
-      setFocusedIndex((prev) => (prev > 0 ? prev - 1 : routes.length - 1));
-    },
-    onDown: () => {
-      setFocusedIndex((prev) => (prev < routes.length - 1 ? prev + 1 : 0));
-    },
-    onSelect: () => {
-      const route = routes[focusedIndex];
-      if (route) {
-        handleSelectRoute(route);
+    const ref = index < routes.length 
+      ? itemRefs.current[index] 
+      : closeButtonRef.current;
+
+    if (ref) {
+      const node = findNodeHandle(ref);
+      if (node) {
+        // This is the KEY: use React Native's internal focus method
+        const { UIManager } = require('react-native');
+        UIManager.dispatchViewManagerCommand(
+          node,
+          // @ts-ignore - command exists on Android TV
+          UIManager.getViewManagerConfig('RCTView').Commands.focus,
+          []
+        );
       }
-    },
-    onBack: () => {
-      onClose?.();
-      return true;
-    },
-  });
+    }
+  }, [routes.length]);
 
-  // Animate focused item
+  // === Scroll to focused item ===
+  const scrollToFocusedItem = useCallback(() => {
+    if (!scrollRef.current || focusedIndex >= routes.length) return;
+
+    const ITEM_HEIGHT = 80 * scale;
+    const VISIBLE_ITEMS = 5;
+    const VISIBLE_AREA = VISIBLE_ITEMS * ITEM_HEIGHT;
+    const totalHeight = routes.length * ITEM_HEIGHT;
+
+    let targetOffset = focusedIndex * ITEM_HEIGHT - (VISIBLE_AREA / 2 - ITEM_HEIGHT / 2);
+    targetOffset = Math.max(0, Math.min(targetOffset, totalHeight - VISIBLE_AREA));
+
+    scrollRef.current.scrollTo({ y: targetOffset, animated: true });
+  }, [focusedIndex, routes.length, scale]);
+
   useEffect(() => {
-    routes.forEach((route, index) => {
-      const anim = scaleAnims[route.id];
+    scrollToFocusedItem();
+  }, [focusedIndex, scrollToFocusedItem]);
+
+  // === Scale animation on focus ===
+  useEffect(() => {
+    routes.forEach((r, i) => {
+      const anim = scaleAnims[r.id];
       if (anim) {
         Animated.spring(anim, {
-          toValue: index === focusedIndex ? 1.05 : 1,
-          friction: 5,
+          toValue: i === focusedIndex ? 1.05 : 1,
+          friction: 6,
+          tension: 100,
           useNativeDriver: true,
         }).start();
       }
     });
   }, [focusedIndex, routes, scaleAnims]);
 
+  // === TV Navigation (Fully Manual) ===
+  useTVFocus({
+    enabled: isOpen,
+    onUp: () => {
+      setFocusedIndex(prev => {
+        const next = prev <= 0 ? totalItems - 1 : prev - 1;
+        requestAnimationFrame(() => focusItemAtIndex(next));
+        return next;
+      });
+      return true;
+    },
+    onDown: () => {
+      setFocusedIndex(prev => {
+        const next = prev >= totalItems - 1 ? 0 : prev + 1;
+        requestAnimationFrame(() => focusItemAtIndex(next));
+        return next;
+      });
+      return true;
+    },
+    onSelect: () => {
+      if (focusedIndex < routes.length) {
+        onRouteSelect(routes[focusedIndex]);
+      } else {
+        onClose?.();
+      }
+      return true;
+    },
+    onBack: () => {
+      onClose?.();
+      onFocusChange?.(false);
+      return true;
+    },
+  });
+
   const styles = useDirectionsPanelStyles(scale);
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          transform: [{ translateX: slideAnim }],
-        },
-      ]}
-    >
+    <Animated.View style={[styles.container, { transform: [{ translateX: slideAnim }] }]}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Routes</Text>
         <TouchableOpacity
-          style={styles.closeButton}
+          ref={closeButtonRef}
+          style={[
+            styles.closeButton,
+            focusedIndex === routes.length && styles.closeButtonFocused,
+          ]}
           onPress={onClose}
+          onFocus={() => setFocusedIndex(routes.length)}
+          focusable={isOpen}
           accessible
-          accessibilityLabel="Close directions panel"
+          accessibilityLabel="Close panel"
           accessibilityRole="button"
         >
-          <Text style={styles.closeButtonText}>✕</Text>
+          <Text style={styles.closeButtonText}>×</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Routes List */}
-      <ScrollView
-        style={styles.routesList}
-        scrollEnabled={false}
-        showsVerticalScrollIndicator={false}
-      >
-        {routes.map((route, index) => {
-          const anim = scaleAnims[route.id];
+      {/* Route List */}
+      <ScrollView ref={scrollRef} style={styles.routesList} bounces={false}>
+        {routes.map((route, idx) => {
+          const isFocused = idx === focusedIndex;
           const isSelected = selectedRoute?.id === route.id;
-          const isFocused = index === focusedIndex;
+          const anim = scaleAnims[route.id];
 
           return (
             <Animated.View
               key={route.id}
-              style={[
-                styles.routeItemWrapper,
-                anim && {
-                  transform: [{ scale: anim }],
-                },
-              ]}
+              style={[styles.routeItemWrapper, anim && { transform: [{ scale: anim }] }]}
             >
               <TouchableOpacity
+                ref={el => (itemRefs.current[idx] = el)}
                 style={[
                   styles.routeItem,
                   isFocused && styles.routeItemFocused,
                   isSelected && styles.routeItemSelected,
                 ]}
-                onPress={() => handleSelectRoute(route)}
+                onPress={() => onRouteSelect(route)}
+                onFocus={() => setFocusedIndex(idx)}
+                focusable={isOpen}
                 accessible
-                accessibilityLabel={`Route: ${route.name}`}
+                accessibilityLabel={route.name}
                 accessibilityRole="button"
-                accessibilityState={{ selected: isSelected }}
               >
-                {/* Route Icon */}
                 <View style={styles.routeIcon}>
-                  <Text style={styles.routeIconText}>🛣️</Text>
+                  <Text style={styles.routeIconText}>Road</Text>
                 </View>
-
-                {/* Route Info */}
                 <View style={styles.routeInfo}>
-                  <Text style={styles.routeName} numberOfLines={1}>
-                    {route.name}
-                  </Text>
-                  <Text style={styles.routeDetails}>
-                    {route.distance} mi • {route.duration}
-                  </Text>
+                  <Text style={styles.routeName}>{route.name}</Text>
+                  <Text style={styles.routeDetails}>{route.distance} mi • {route.duration}</Text>
                 </View>
-
-                {/* Selection Indicator */}
                 {isSelected && (
                   <View style={styles.selectionIndicator}>
-                    <Text style={styles.selectionIndicatorText}>✓</Text>
+                      <MaterialIcons name="arrow-forward" size={20 * scale} color="#fff" />
                   </View>
                 )}
               </TouchableOpacity>
@@ -195,19 +241,11 @@ export const DirectionsPanel: React.FC<DirectionsPanelProps> = ({
           <Text style={styles.detailsTitle}>Route Details</Text>
           <View style={styles.detailsContent}>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>From:</Text>
-              <Text style={styles.detailValue}>{selectedRoute.from}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>To:</Text>
-              <Text style={styles.detailValue}>{selectedRoute.to}</Text>
-            </View>
-            <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Distance:</Text>
-              <Text style={styles.detailValue}>{selectedRoute.distance} miles</Text>
+              <Text style={styles.detailValue}>{selectedRoute.distance}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Est. Time:</Text>
+              <Text style={styles.detailLabel}>Duration:</Text>
               <Text style={styles.detailValue}>{selectedRoute.duration}</Text>
             </View>
           </View>
@@ -215,9 +253,8 @@ export const DirectionsPanel: React.FC<DirectionsPanelProps> = ({
             <TouchableOpacity
               style={styles.clearRouteButton}
               onPress={onClearRoute}
+              focusable={isOpen}
               accessible
-              accessibilityRole="button"
-              accessibilityLabel="Clear selected route"
             >
               <Text style={styles.clearRouteButtonText}>Clear Route</Text>
             </TouchableOpacity>
@@ -227,16 +264,18 @@ export const DirectionsPanel: React.FC<DirectionsPanelProps> = ({
     </Animated.View>
   );
 };
-
-const useDirectionsPanelStyles = (scale: number) => {
-  return StyleSheet.create({
+/* ================================================================== */
+/* STYLES – TV-optimized */
+/* ================================================================== */
+const useDirectionsPanelStyles = (scale: number) =>
+  StyleSheet.create({
     container: {
       position: 'absolute',
       left: 0,
       top: 0,
       bottom: 0,
       width: 350 * scale,
-      backgroundColor: '#ffffff',
+      backgroundColor: '#fff',
       borderRightWidth: 2,
       borderRightColor: '#e0e0e0',
       shadowColor: '#000',
@@ -245,7 +284,6 @@ const useDirectionsPanelStyles = (scale: number) => {
       shadowRadius: 8,
       elevation: 5,
       zIndex: 100,
-      display: 'flex',
       flexDirection: 'column',
     },
     header: {
@@ -264,17 +302,27 @@ const useDirectionsPanelStyles = (scale: number) => {
       color: '#1a1a1a',
     },
     closeButton: {
-      width: 36 * scale,
-      height: 36 * scale,
-      borderRadius: 18 * scale,
-      backgroundColor: '#f0f0f0',
+      width: 40 * scale,
+      height: 40 * scale,
+      borderRadius: 20 * scale,
+      backgroundColor: '#000',
       justifyContent: 'center',
       alignItems: 'center',
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    closeButtonFocused: {
+      borderColor: '#FFD700',
+      shadowColor: '#FFD700',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.6,
+      shadowRadius: 6,
+      elevation: 5,
     },
     closeButtonText: {
       fontSize: 20 * scale,
-      color: '#666',
-      fontWeight: '600',
+      color: '#fff',
+      fontWeight: 'bold',
     },
     routesList: {
       flex: 1,
@@ -288,52 +336,45 @@ const useDirectionsPanelStyles = (scale: number) => {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 12 * scale,
-      paddingVertical: 12 * scale,
+      paddingVertical: 14 * scale,
       marginHorizontal: 8 * scale,
-      borderRadius: 8 * scale,
+      borderRadius: 10 * scale,
       backgroundColor: '#f9f9f9',
       marginBottom: 8 * scale,
-      borderWidth: 2,
+      borderWidth: 3,
       borderColor: 'transparent',
     },
     routeItemFocused: {
       borderColor: '#FFD700',
-      backgroundColor: '#fffef0',
+      backgroundColor: '#fffbe6',
       shadowColor: '#FFD700',
       shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 3,
+      shadowOpacity: 0.5,
+      shadowRadius: 6,
+      elevation: 6,
     },
     routeItemSelected: {
+      backgroundColor: '#e3f2fd',
       borderColor: '#007bff',
-      backgroundColor: '#e7f3ff',
     },
     routeIcon: {
       width: 40 * scale,
       height: 40 * scale,
       borderRadius: 8 * scale,
-      backgroundColor: '#e3f2fd',
+      backgroundColor: '#bbdefb',
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 12 * scale,
     },
-    routeIconText: {
-      fontSize: 20 * scale,
-    },
-    routeInfo: {
-      flex: 1,
-    },
+    routeIconText: { fontSize: 15 * scale },
+    routeInfo: { flex: 1 },
     routeName: {
-      fontSize: 14 * scale,
+      fontSize: 15 * scale,
       fontWeight: '600',
       color: '#1a1a1a',
-      marginBottom: 4 * scale,
+      marginBottom: 2 * scale,
     },
-    routeDetails: {
-      fontSize: 12 * scale,
-      color: '#666',
-    },
+    routeDetails: { fontSize: 13 * scale, color: '#555' },
     selectionIndicator: {
       width: 28 * scale,
       height: 28 * scale,
@@ -361,23 +402,21 @@ const useDirectionsPanelStyles = (scale: number) => {
       color: '#1a1a1a',
       marginBottom: 8 * scale,
     },
-    detailsContent: {
-      gap: 6 * scale,
+    detailsContent: { gap: 6 * scale },
+    detailRow: { flexDirection: 'row', justifyContent: 'space-between' },
+    detailLabel: { fontSize: 12 * scale, color: '#666', fontWeight: '500' },
+    detailValue: { fontSize: 12 * scale, color: '#1a1a1a', fontWeight: '600' },
+    clearRouteButton: {
+      marginTop: 12 * scale,
+      paddingVertical: 10 * scale,
+      paddingHorizontal: 20 * scale,
+      backgroundColor: '#ff4d4f',
+      borderRadius: 8 * scale,
+      alignSelf: 'center',
     },
-    detailRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    detailLabel: {
-      fontSize: 12 * scale,
-      color: '#666',
-      fontWeight: '500',
-    },
-    detailValue: {
-      fontSize: 12 * scale,
-      color: '#1a1a1a',
+    clearRouteButtonText: {
+      color: '#fff',
       fontWeight: '600',
+      fontSize: 14 * scale,
     },
   });
-};
