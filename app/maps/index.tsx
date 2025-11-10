@@ -549,40 +549,7 @@ const handleDirectionsFocusChange = (hasFocus: boolean) => {
 .leaflet-control-zoom a.focused {
   transform: scale(1.1);
 }
-          // .leaflet-control-zoom {
-          //   border: 2px solid transparent !important;
-          //   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
-          //   transition: all 0.3s ease !important;
-          // }
-
-          // .leaflet-control-zoom.focused {
-          //   border: 3px solid #FFD700 !important;
-          //   box-shadow: 0 0 15px rgba(255, 215, 0, 0.9) !important;
-          //   transform: scale(1.1);
-          // }
-
-          // .leaflet-control-zoom a {
-          //   width: 40px !important;
-          //   height: 40px !important;
-          //   line-height: 40px !important;
-          //   font-size: 24px !important;
-          //   font-weight: bold !important;
-          //   background-color: #007bff !important;
-          //   color: white !important;
-          //   transition: all 0.3s ease !important;
-          // }
-
-          // .leaflet-control-zoom a:hover {
-          //   background-color: #0056b3 !important;
-          // }
-
-          // .leaflet-control-zoom.focused a {
-          //   background-color: #0056b3 !important;
-          // }
-
-          // .leaflet-control-zoom-in {
-          //   border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
-          // }
+          
           .leaflet-control-zoom,
   .leaflet-control-zoom-in,
   .leaflet-control-zoom-out {
@@ -714,16 +681,14 @@ const handleDirectionsFocusChange = (hasFocus: boolean) => {
         </div>
 
         <script>
-          // ============================================================================
-          // MAP INITIALIZATION
-          // ============================================================================
 
           // Initialize map centered on USA - ENABLE default zoom controls
           const map = L.map('map', {
            // zoomControl: true,        // ENABLE default zoom controls (+/- buttons)
            zoomAnimation: true, 
            scrollWheelZoom: false,   // Disable mouse wheel zoom
-            doubleClickZoom: false,   // Disable double-click zoom
+            doubleClickZoom: false, 
+            attributionControl: false,   // Disable double-click zoom
             touchZoom: false,         // Disable touch/pinch zoom
             boxZoom: false,   
             keyboard: false,        // Disable shift+drag box zoom
@@ -750,8 +715,7 @@ window.clickZoomOut = () => {
           // Add OpenStreetMap base layer
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            attribution:
-              '© OpenStreetMap contributors | Map data © OpenStreetMap contributors',
+            attribution: ''
           }).addTo(map);
 
           // ============================================================================
