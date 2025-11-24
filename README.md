@@ -2,7 +2,12 @@
 
 ![Map Application Screenshot](./assets/tv_icons/icon-1920x720.png)
 
-A React Native application that provides interactive visualization of US maps using Esri REST API and OpenStreetMap (OSM) data. Optimized for TV platforms with full D-pad remote control navigation.
+A React Native / Expo app for TV-first mapping and analytics. Core areas:
+- **Maps (`app/maps`)**: Esri REST + OSM base maps, layer toggles, and TV remote navigation.
+- **RNMaps (`app/rnmaps`)**: React Native Maps playground with fullscreen controls and focus-safe UI.
+- **Analytics (`app/analytics`)**: Real-time trading dashboards and sample weather analytics with focusable cards.
+
+Paste Loom walkthrough links directly in the **Loom demos** section so teammates can jump to the right feature set.
 
 This application combines the power of Esri REST API and OpenStreetMap to deliver a rich mapping experience on TV platforms. It's specifically designed for TV remote navigation, with all interactive elements fully accessible via D-pad controls.
 
@@ -92,6 +97,24 @@ Start the development server with live reloading:
 ```bash
 yarn start
 ```
+
+## 📁 Feature Areas
+
+### Maps (`app/maps`)
+- Esri REST API layer config in `app/maps/layersConfig.ts`
+- OSM tiles as base map with optional custom tile servers
+- Layer toggles, dynamic updates, and thematic styling for political, environmental, and demographic data
+
+### RNMaps (`app/rnmaps`)
+- React Native Maps-backed experience with fullscreen mode and keep-awake support
+- Focus-friendly components for TV remotes; theme-aware layout in `app/rnmaps/_layout.tsx`
+- Context-driven fullscreen state management in `app/rnmaps/context`
+
+### Analytics (`app/analytics`)
+- Landing grid of focusable cards to launch real-time dashboards (trades, line/bar/scatter/gauge/Gantt)
+- Weather and general analytics sample screens; screens live in `app/analytics/screens`
+- Reusable focusable UI components in `app/analytics/components`
+- Service layer for live data hooks in `app/analytics/services`
 
 ## 🗺️ Map Configuration
 
@@ -207,6 +230,14 @@ yarn start
 - **TypeScript Support**: Type-safe codebase
 - **Modular Architecture**: Easy to extend and maintain
 - **Cross-Platform**: Works on iOS, Android, and web
+
+## 🎥 Loom demos (paste links here)
+- US Maps overview: `your-loom-link-for-maps`
+ link: https://www.loom.com/share/f21cbcfd52ea4faeb58b2de6ac4735f8
+- RNMaps walkthrough: `your-loom-link-for-rnmaps`
+  link: https://www.loom.com/share/d2a5b0d26650429bb9fa74a4c4b4db90
+- Analytics dashboards: `your-loom-link-for-analytics`
+  link : https://www.loom.com/share/98b68402e53b40ad8b78b1ca702d780f
 
 ## 🚀 Deployment
 
